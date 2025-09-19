@@ -11,8 +11,9 @@ namespace KineticShift
     internal class BoneModifier
     {
         protected readonly Transform Bone;
-        protected readonly float _boneMass;
 
+
+        private readonly Tethering _tethering;
         // Height / Width ratio
         private readonly float _height;
         // Width / Height ratio
@@ -56,6 +57,10 @@ namespace KineticShift
         // Synchronized periodically when animator changes states.
         private Quaternion _prevRotation;
 
+
+        private Quaternion _defaultLocalRotation;
+
+
         //private float _velocity;
         //private float _kineticEnergy;
         //private float _damping 
@@ -63,10 +68,12 @@ namespace KineticShift
         /// <summary>
         /// 
         /// </summary>
-        /// <param name="halfBoneFatMass">Higher value — higher offset at high velocities.</param>
-        internal BoneModifier(Transform bone, SkinnedMeshRenderer skinnedMeshRenderer, float halfBoneFatMass)
+        /// <param name="centeredBone">A centered bone with normal orientation on the body. Required for setup only.</param>
+        /// <param name="bone">Bone that will be modified.</param>
+        /// <param name="skinnedMeshRenderer"></param>
+        internal BoneModifier(Transform bone, Transform centeredBone, SkinnedMeshRenderer skinnedMeshRenderer)
         {
-            if (bone == null || skinnedMeshRenderer == null || halfBoneFatMass <= 0f)
+            if (bone == null || skinnedMeshRenderer == null || centeredBone == null)
             {
                 KS.Logger.LogError($"{this.GetType().Name} wasn't initialized due to wrong argument");
                 return;
@@ -75,14 +82,17 @@ namespace KineticShift
             Bone = bone;
             _prevPosition = bone.position;
             _prevRotation = bone.rotation;
-            _boneMass = halfBoneFatMass;
             _baseScale = bone.localScale;
             _baseScaleMagnitude = _baseScale.magnitude;
-            var bakerMesh = new Mesh();
-            skinnedMeshRenderer.BakeMesh(bakerMesh);
+            _defaultLocalRotation = bone.localRotation;
 
-            var vertices = bakerMesh.vertices;
-            var triangles = bakerMesh.triangles;
+            _tethering = new Tethering(centeredBone, _prevPosition);
+
+            var bakedMesh = new Mesh();
+            skinnedMeshRenderer.BakeMesh(bakedMesh);
+
+            var vertices = bakedMesh.vertices;
+            var triangles = bakedMesh.triangles;
             var t = skinnedMeshRenderer.transform;
             Ray[] rays = [
                 new Ray(bone.position, bone.position + bone.forward), 
@@ -171,50 +181,81 @@ namespace KineticShift
             velocity = (velocity + force) * deltaTime;
             //positionModifier = deltaVector - velocity * delta;
             //var newPosition = _prevPosition + velocity; // - targetPosition);
-            positionModifier = deltaVecLocal - velocity;  //Bone.TransformVector(newPosition - currentPosition);
+
+            positionModifier = Vector3.zero;
+            //positionModifier = deltaVecLocal - velocity;  //Bone.TransformVector(newPosition - currentPosition);
 
 
-            // Rotation calculation
-            var currentRot = Bone.rotation;
-            var prevRot = _prevRotation;
-            var deltaRot = currentRot * Quaternion.Inverse(prevRot);
+            //// Rotation calculation
+            //var currentRot = Bone.rotation;
+            //var prevRot = _prevRotation;
+            //var deltaRot = currentRot * Quaternion.Inverse(prevRot);
 
-            //var targetRot = currentRot;
+            ////var targetRot = currentRot;
 
-            deltaRot.ToAngleAxis(out var angle, out var axis);
+            //deltaRot.ToAngleAxis(out var angle, out var axis);
 
-            // Due to (probably) the type being float we wont arrive at the target with this method,
-            // and instead will get stuck in tiny numbers.
-            // To avoid micro glitches/restless behavior we settle down with 0.1f. Epsilon is too big.
-            //if (angle > 0.1f)
-            //{
-                if (angle > 180f) angle -= 360f;
+            //// Due to (probably) the type being float we wont arrive at the target with this method,
+            //// and instead will get stuck in tiny numbers.
+            //// To avoid micro glitches/restless behavior we settle down with 0.1f. Epsilon is too big.
+            ////if (angle > 0.1f)
+            ////{
+            //    if (angle > 180f) angle -= 360f;
 
-                var torque = axis * (angle * Mathf.Deg2Rad * _rotSpring);
+            //    var torque = axis * (angle * Mathf.Deg2Rad * _rotSpring);
 
-                var angularVelocity = _prevAngularVelocity;
-                var dampingTorque = _rotDrag * angularVelocity;
-                torque += dampingTorque;
+            //    var angularVelocity = _prevAngularVelocity;
+            //    var dampingTorque = _rotDrag * angularVelocity;
+            //    torque += dampingTorque;
 
-                angularVelocity += torque * deltaTime;
-                
-                var targetRot = Quaternion.Euler(angularVelocity * (Mathf.Rad2Deg * deltaTime)) * prevRot;
-                rotationModifier = (currentRot * Quaternion.Inverse(targetRot)).eulerAngles;
+            //    angularVelocity += torque * deltaTime;
 
+            //    var targetRot = Quaternion.Euler(angularVelocity * (Mathf.Rad2Deg * deltaTime)) * prevRot;
+            //    rotationModifier = (currentRot * Quaternion.Inverse(targetRot)).eulerAngles;
+            //rotationModifier = ApplyAngularVelocity(deltaTime);
+            rotationModifier = _tethering.ApplyAdvancedTetheringEffect(velocity, deltaTime);
+
+            KS.Logger.LogDebug($"rotationModifier({rotationModifier.x:F2},{rotationModifier.y:F2},{rotationModifier.z:F2})");
             scaleModifier = _baseScale;
-            KS.Logger.LogDebug($"rotMod{rotationModifier} deltaRot{deltaRot.eulerAngles} prevRot{_prevRotation.eulerAngles} angularVelocity{angularVelocity}");
             //}
 
             //ApplyScaleModification(velocity, deltaTime, out scaleModifier);
 
             // Using actual position from this LateUpdate before IK has updated
             // Will be problematic when some other bone modifier nearby is in play.
-            _prevRotation = targetRot;
             _prevPosition = Bone.TransformPoint(positionModifier);
             _prevVelocity = velocity;
-            _prevAngularVelocity = angularVelocity;
         }
 
+        private Vector3 ApplyAngularVelocity(float deltaTime)
+        {
+            var currentRot = Bone.rotation;
+            var prevRot = _prevRotation;
+            var deltaRot = currentRot * Quaternion.Inverse(prevRot);
+
+            deltaRot.ToAngleAxis(out var angle, out var axis);
+
+            if (angle > 180f) angle -= 360f;
+
+            var torque = axis * (angle * Mathf.Deg2Rad * _rotSpring);
+
+            var angularVelocity = _prevAngularVelocity;
+            var dampingTorque = _rotDrag * angularVelocity;
+            torque += dampingTorque;
+
+            angularVelocity += torque * deltaTime;
+
+            var targetRot = Quaternion.Euler(angularVelocity * (Mathf.Rad2Deg * deltaTime)) * prevRot;
+
+            _prevRotation = targetRot;
+            _prevAngularVelocity = angularVelocity;
+
+            //KS.Logger.LogDebug($"rotMod{rotationModifier} deltaRot{deltaRot.eulerAngles} prevRot{_prevRotation.eulerAngles} angularVelocity{angularVelocity}");
+
+            return (currentRot * Quaternion.Inverse(targetRot)).eulerAngles;
+        }
+
+        
 
         private void ApplyScaleModification(Vector3 velocity, float deltaTime, out Vector3 scaleModifier)
         {

@@ -14,7 +14,7 @@ namespace KineticShift
         private const string Thigh2R = "cf_d_thigh02_R";
         private const string Thigh1R = "cf_d_thigh01_R";
         private const string Bust = "cf_d_bust00";
-        private const string Bust0R = "cf_s_bust00_R";
+        private const string Bust1R = "cf_d_bust01_R";
         private const float _hugeFrameTime = 1f / 30f;
 
         private readonly ChaControl _chara;
@@ -23,7 +23,7 @@ namespace KineticShift
         private readonly List<string> _activeNames = [];
         private static readonly List<string> _allNames =
             [
-            Bust,
+            Bust1R,
             //Thigh2R,
             ];
         private static readonly List<string> _auxNames =
@@ -48,9 +48,9 @@ namespace KineticShift
         {
             // Setup bones for effector.
 
-            var meshBone = (_chara.rendBody.GetComponent<SkinnedMeshRenderer>());
+            var mesh = (_chara.rendBody.GetComponent<SkinnedMeshRenderer>());
 
-            if (meshBone == null)
+            if (mesh == null)
             {
                 KS.Logger.LogDebug($"{GetType().Name} couldn't find mesh.");
                 return;
@@ -78,9 +78,21 @@ namespace KineticShift
             }
             void AddToDic(BoneName boneName, Transform transform)
             {
-                if (_mainDic.ContainsKey(boneName) || transform == null) return;
+                if (_mainDic.ContainsKey(boneName) 
+                    || transform == null 
+                    || !FindBone(_chara, GetCenteredBone(boneName), out var centeredBone)
+                    ) return;
 
-                _mainDic.Add(boneName, new BoneData(new(transform, meshBone, 0.5f)));
+                _mainDic.Add(boneName, new BoneData(new(transform, centeredBone, mesh)));
+            }
+            string GetCenteredBone(BoneName boneName)
+            {
+                return boneName switch
+                {
+                    BoneName.Bust1R => Bust,
+                    _ => "",
+                };
+
             }
         }
 
@@ -96,6 +108,7 @@ namespace KineticShift
             return bone switch
             {
                 Bust => _mainDic[BoneName.Bust].boneModifierData,
+                Bust1R => _mainDic[BoneName.Bust1R].boneModifierData,
                 Thigh2R => _mainDic[BoneName.Thigh2R].boneModifierData,
                 _ => null
             };
@@ -117,9 +130,18 @@ namespace KineticShift
         {
 
         }
+        internal void OnChangeAnimator()
+        {
+
+        }
+        internal void OnSetPlay(string animName)
+        {
+
+        }
 
         private enum BoneName
         {
+            Bust1R,
             Bust,
             Thigh2R,
         }

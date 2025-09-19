@@ -87,5 +87,15 @@ namespace KineticShift
         {
 
         }
+
+        internal void OnChangeAnimator()
+        {
+
+        }
+
+        internal void OnSetPlay()
+        {
+
+        }
     }
 }

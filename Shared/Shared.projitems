@@ -9,10 +9,12 @@
     <Import_RootNamespace>KineticShift</Import_RootNamespace>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)Hooks.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)KSCharaController.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)BoneEffector.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)BoneData.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)BoneModifier.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)KS.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Modifiers\Tethering.cs" />
   </ItemGroup>
 </Project>
