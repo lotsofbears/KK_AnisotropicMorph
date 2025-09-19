@@ -1,0 +1,18 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects Condition="'$(MSBuildVersion)' == '' Or '$(MSBuildVersion)' &lt; '16.0'">$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>66189de6-4bfa-4144-9810-d40f999341af</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>KineticShift</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)KSCharaController.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)BoneEffector.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)BoneData.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)BoneModifier.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)KS.cs" />
+  </ItemGroup>
+</Project>
