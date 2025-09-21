@@ -13,8 +13,12 @@
     <Compile Include="$(MSBuildThisFileDirectory)KSCharaController.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)BoneEffector.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)BoneData.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)BoneModifier.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Modifiers\BoneModifier.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)KS.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Modifiers\Tethering.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Modifiers\TandemBoneModifier.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Modifiers\Effects\Tethering.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="$(MSBuildThisFileDirectory)Modifiers\Effects\" />
   </ItemGroup>
 </Project>

@@ -8,38 +8,44 @@ namespace KineticShift
 {
     internal class Tethering
     {
-        internal Tethering(Transform centeredBone, Vector3 bonePosition)
-        {
-            var localBonePosition = centeredBone.InverseTransformPoint(bonePosition);
-            var divider = Mathf.Abs(localBonePosition.x) + Mathf.Abs(localBonePosition.z);
-            _yawInfluence = divider == 0f ? (0f) : (Mathf.Abs(localBonePosition.x) / divider);
-            _yawInfluence = Mathf.Abs(_yawInfluence);
-        }
 
 
         // Multiplier for velocity
-        private float _rotationMultiplier = 1000f;
+        private float _multiplier = 1000f;
         // Limit of rotation
-        private float _maxRotationAngle = 30f;
+        private float _maxAngle = 30f;
         // How strongly it springs back
         private float _springStiffness = 5f;
-        // How quickly it settles
-        private float _damping = 2f;
+        //// How quickly it settles
+        //private float _damping = 2f;
         // Natural frequency of bounce
-        private float _frequency = 4f;
+        private float _frequency = 1.3f; // 2f; // 4f;
         [Range(0f, 1f)]
         // 0 = undamped, 1 = critically damped
         private float _dampingRatio = 0.3f;
-        // How responsive the spring is
-        private float _response = 1f;
+        //// How responsive the spring is
+        //private float _response = 1f;
 
         private Vector3 _springVelocity;
         private Vector3 _tetherRotationEuler;
         // Current rotation offset
         private Vector3 _springPosition;
+        // How much Z velocity influences bone
+        private readonly float _influenceZ;
+        // How much X velocity influences bone
+        private readonly float _influenceX;
 
-        private readonly float _yawInfluence;
-     
+
+        internal Tethering(Transform centeredBone, Vector3 bonePosition)
+        {
+            var localBonePosition = centeredBone.InverseTransformPoint(bonePosition);
+            var divider = Mathf.Abs(localBonePosition.x) + Mathf.Abs(localBonePosition.z);
+            _influenceZ = divider == 0f ? (0f) : (localBonePosition.x / divider);
+            //_yawInfluence = Mathf.Abs(_yawInfluence);
+            _influenceX = 1f - Mathf.Abs(_influenceZ);
+        }
+
+
         //private void Extra()
         //{
 
@@ -67,43 +73,47 @@ namespace KineticShift
         //    Quaternion rotationOffset = Quaternion.Euler(springPosition);
         //    transform.localRotation = defaultLocalRotation * rotationOffset;
         //}
-        internal Vector3 ApplySimpleTetheringEffect(Vector3 velocity, float deltaTime)
-        {
-            var targetEuler = new Vector3(-velocity.y, -velocity.x, 0f) * _rotationMultiplier;
+        //internal Vector3 ApplySimpleTethering(Vector3 velocity, float deltaTime)
+        //{
+        //    var targetEuler = new Vector3(-velocity.y, -velocity.x, 0f) * _rotationMultiplier;
 
-            targetEuler = Vector3.ClampMagnitude(targetEuler, _maxRotationAngle);
+        //    targetEuler = Vector3.ClampMagnitude(targetEuler, _maxRotationAngle);
 
-            _tetherRotationEuler = Vector3.SmoothDamp(
-                _tetherRotationEuler,
-                targetEuler,
-                ref _springVelocity,
-                1f / _springStiffness,
-                Mathf.Infinity,
-                deltaTime
-                );
+        //    _tetherRotationEuler = Vector3.SmoothDamp(
+        //        _tetherRotationEuler,
+        //        targetEuler,
+        //        ref _springVelocity,
+        //        1f / _springStiffness,
+        //        Mathf.Infinity,
+        //        deltaTime
+        //        );
 
-            _springVelocity *= Mathf.Exp(-_damping * deltaTime);
+        //    _springVelocity *= Mathf.Exp(-_damping * deltaTime);
 
-            KS.Logger.LogDebug($"targetEuler({targetEuler.x:F2},{targetEuler.y:F2},{targetEuler.z:F2})");
-            return targetEuler;
-        }
-        internal Vector3 ApplyAdvancedTetheringEffect(Vector3 velocity, float deltaTime)
+        //    KS.Logger.LogDebug($"targetEuler({targetEuler.x:F2},{targetEuler.y:F2},{targetEuler.z:F2})");
+        //    return targetEuler;
+        //}
+        internal Vector3 ApplyAdvancedTethering(Vector3 velocity, float deltaTime)
         {
             var targetEuler = new Vector3(
                 -velocity.y,
-                -velocity.x + (-velocity.z * _yawInfluence),
-                0f
-                ) * _rotationMultiplier;
+                //(velocity.x * _influenceX) + (-velocity.z * _influenceZ),
 
-            targetEuler = Vector3.ClampMagnitude(targetEuler, _maxRotationAngle);
+                -velocity.z * _influenceZ,
+                0f
+                ) * _multiplier;
+
+            KS.Logger.LogDebug($"targetEuler({targetEuler.x:F2},{targetEuler.y:F2},{targetEuler.z:F2}) velocity({velocity.x:F2},{velocity.y:F2},{velocity.z:F2})");
+            targetEuler = Vector3.ClampMagnitude(targetEuler, _maxAngle);
 
             _springPosition = DampedSpring(_springPosition, targetEuler, ref _springVelocity, _frequency, _dampingRatio, deltaTime);
 
             return _springPosition;
         }
         /// <summary>
+        /// Spat out by GPT.
         /// Damped harmonic oscillator for smooth overshoot & bounce behavior.
-        /// Based on https://www.youtube.com/watch?v=KPoeNZZ6H4s
+        /// Based on https://www.youtube.com/watch?v=KPoeNZZ6H4s 
         /// </summary>
         private Vector3 DampedSpring(Vector3 current, Vector3 target, ref Vector3 velocity, float freq, float damp, float dt)
         {
@@ -117,6 +127,19 @@ namespace KineticShift
 
             velocity += a * dt;
             return current + velocity * dt;
-        }
-    }
+
+        }  
+        //   (forward)
+        //
+        //        -Z
+        //       |   
+        // +X    |    -X
+        // <—————|—————>
+        //       |
+        //       |
+        //        +Z
+        //
+        // R  — together  + separate
+        // L  — separate  + together
+    }   
 }

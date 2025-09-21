@@ -5,10 +5,20 @@ using System.Text;
 
 namespace KineticShift
 {
-    internal readonly struct BoneData(BoneModifier boneModifier)
+    internal readonly struct BoneData
     {
-        internal readonly BoneModifier boneModifier = boneModifier;
-        internal readonly BoneModifierData boneModifierData = new();
+        internal BoneData(BoneModifier boneModifier)
+        {
+            this.boneModifier = boneModifier;
+            this.boneModifierData = new();
+        }
+        internal BoneData(BoneModifier boneModifier, BoneModifierData boneModifierData)
+        {
+            this.boneModifier = boneModifier;
+            this.boneModifierData = boneModifierData;
+        }
+        internal readonly BoneModifier boneModifier;
+        internal readonly BoneModifierData boneModifierData;
 
     }
 }
