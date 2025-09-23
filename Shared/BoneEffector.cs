@@ -154,7 +154,7 @@ namespace KineticShift
 
                 // Add master with slaves
                 var boneModifierDataMaster = new BoneModifierData();
-                _mainDic.Add(master, new BoneData(new TandemBoneModifier(masterTransform, boneModifierSlaves, boneModifierDataMaster), boneModifierDataMaster));
+                _mainDic.Add(master, new BoneData(new MasterBoneModifier(masterTransform, boneModifierSlaves, boneModifierDataMaster), boneModifierDataMaster));
 
             }
             //string GetCenteredBone(BoneName boneName)
@@ -189,12 +189,13 @@ namespace KineticShift
         }
         private void UpdateModifiers()
         {
-            var deltaTime = Time.unscaledDeltaTime;
+            var deltaTime = Time.deltaTime;
+            var unscaledDeltaTime = Time.unscaledDeltaTime;
             if (deltaTime > _hugeFrameTime) deltaTime = _hugeFrameTime;
 
             foreach (var boneNameEnum in _updateList)
             {
-                _mainDic[boneNameEnum].boneModifier.UpdateModifiers(deltaTime);
+                _mainDic[boneNameEnum].boneModifier.UpdateModifiers(deltaTime, unscaledDeltaTime);
             }
         }
         internal void OnConfigUpdate()

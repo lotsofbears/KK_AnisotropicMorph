@@ -14,12 +14,12 @@ namespace KineticShift
         private float _multiplier = 1000f;
         // Limit of rotation
         private float _maxAngle = 30f;
-        // How strongly it springs back
-        private float _springStiffness = 5f;
+        //// How strongly it springs back
+        //private float _springStiffness = 5f;
         //// How quickly it settles
         //private float _damping = 2f;
         // Natural frequency of bounce
-        private float _frequency = 1.3f; // 2f; // 4f;
+        private float _frequency = 2f; // 4f;
         [Range(0f, 1f)]
         // 0 = undamped, 1 = critically damped
         private float _dampingRatio = 0.3f;
@@ -97,13 +97,13 @@ namespace KineticShift
         {
             var targetEuler = new Vector3(
                 -velocity.y,
-                //(velocity.x * _influenceX) + (-velocity.z * _influenceZ),
+                (velocity.x * _influenceX) + (-velocity.z * _influenceZ),
 
-                -velocity.z * _influenceZ,
+                //-velocity.z * _influenceZ,
                 0f
                 ) * _multiplier;
 
-            KS.Logger.LogDebug($"targetEuler({targetEuler.x:F2},{targetEuler.y:F2},{targetEuler.z:F2}) velocity({velocity.x:F2},{velocity.y:F2},{velocity.z:F2})");
+            //KS.Logger.LogDebug($"targetEuler({targetEuler.x:F2},{targetEuler.y:F2},{targetEuler.z:F2}) velocity({velocity.x:F2},{velocity.y:F2},{velocity.z:F2})");
             targetEuler = Vector3.ClampMagnitude(targetEuler, _maxAngle);
 
             _springPosition = DampedSpring(_springPosition, targetEuler, ref _springVelocity, _frequency, _dampingRatio, deltaTime);

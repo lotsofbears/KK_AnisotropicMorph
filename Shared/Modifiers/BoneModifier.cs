@@ -7,7 +7,6 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using UnityEngine;
-using static ActionGame.FixEventScheduler;
 
 namespace KineticShift
 {
@@ -26,24 +25,27 @@ namespace KineticShift
 
 
         private float _posSpring = 300f;
-        private float _posDrag = -5f;   
+        private float _posDrag = -5f;
+        private float _maxMagnitude = 0.1f;
         
-
-        private float _rotationSpring = 10f;
+        // Amplifier for angular rotation
+        private float _torqueAmplifier = 10f;
         // Resistance for angular rotation
-        private float _rotationDrag = -2f;
+        private float _torqueDrag = -2f;
+
+        private float _maxRotationAngle = 45f;
 
         private float _scaleScalar = 1f;
         // Max scale along velocity axis
-        private float _maxStretchScale = 1.5f;
+        private float _maxStretchScale = 1.33f;
         // Min scale on perpendicular axes
-        private float _minSquashScale = 0.5f;
+        private float _minSquashScale = 0.67f;
         // Smoothing factor for scale change
-        private float _scaleSmoothing = 10f;
+        private float _scaleSmoothing = 5f;
         // How strong the deceleration squash is
-        private float _squashIntensity = 1.0f;
+        private float _squashIntensity = 200f;
         // How quickly the squash effect fades
-        private float _squashDecaySpeed = 5f;
+        private float _squashDecaySpeed = 3f;
         private Vector3 _baseScale;
         private readonly float _baseScaleMagnitude;
         // Momentum reversal squash offset
@@ -58,6 +60,8 @@ namespace KineticShift
         private Vector3 _prevAngularVelocity;
         private Vector3 _prevPosition;
         private Vector3 _prevScale;
+
+        private float _velocityDeltaZ;
         // Pseudo previous as we use dead reckoning and have no way to know,
         // Synchronized periodically when animator changes states.
         private Quaternion _prevRotation;
@@ -179,19 +183,19 @@ namespace KineticShift
         /// Overload meant for master in tandem setup.
         /// </summary>
         /// <param name="effects">Uses bit shifting</param>
-        internal void UpdateModifiers(Vector3 velocity, Effect effects, float deltaTime)
+        internal void UpdateModifiers(Vector3 velocity, Effect effects, float deltaTime, float unscaledDeltaTime)
         {
             if ((effects & Effect.VelocityAxial) != 0)
-                BoneModifierData.PositionModifier += ApplyAxialVelocity(deltaTime, out velocity);
+                BoneModifierData.PositionModifier += ApplyAxialVelocity(unscaledDeltaTime, out velocity);
 
             if ((effects & Effect.VelocityAngular) != 0)
-                BoneModifierData.RotationModifier += ApplyAngularVelocity(deltaTime);
+                BoneModifierData.RotationModifier += ApplyAngularVelocity(unscaledDeltaTime);
 
             if ((effects & Effect.Tethering) != 0 && Tethering != null)
                 BoneModifierData.RotationModifier += Tethering.ApplyAdvancedTethering(velocity, deltaTime);
 
             if ((effects & Effect.AccelerationScale) != 0)
-                BoneModifierData.ScaleModifier += ApplyScaleModification(velocity, deltaTime);
+                BoneModifierData.ScaleModifier += ApplyScaleModification(velocity, deltaTime, unscaledDeltaTime);
 
             if ((effects & Effect.DecelerationSquash) != 0)
             {
@@ -205,7 +209,7 @@ namespace KineticShift
         /// Overload meant for master in tandem setup.
         /// </summary>
         /// <param name="effects">Uses bit shifting</param>
-        internal void UpdateModifiers(Vector3? positionModifier, Vector3? rotationModifier, Vector3? scaleModifier, Vector3 velocity, Effect effects, float deltaTime)
+        internal void UpdateModifiers(Vector3? positionModifier, Vector3? rotationModifier, Vector3? scaleModifier, Vector3 velocity, Effect effects, float deltaTime, float unscaledDeltaTime)
         {
             if (positionModifier != null) 
                 BoneModifierData.PositionModifier = (Vector3)positionModifier;
@@ -216,13 +220,13 @@ namespace KineticShift
             if (scaleModifier != null) 
                 BoneModifierData.ScaleModifier = (Vector3)scaleModifier;
 
-            UpdateModifiers(velocity, effects, deltaTime);
+            UpdateModifiers(velocity, effects, deltaTime, unscaledDeltaTime);
         }
 
         /// <summary>
         /// Meant for access from BoneEffector.
         /// </summary>
-        internal virtual void UpdateModifiers(float deltaTime)
+        internal virtual void UpdateModifiers(float deltaTime, float unscaledDeltaTime)
         {
             //// Position calculation
             //var currentPosition = Bone.position;
@@ -292,8 +296,16 @@ namespace KineticShift
         {
             velocity = _velocity;
 
-            //var currentPosition = Bone.position;
+            var currentPosition = Bone.position;
+            
+
             var deltaVecLocal = Bone.InverseTransformPoint(_prevPosition);
+            // Strip Z axis
+            _velocityDeltaZ = deltaVecLocal.z;
+
+            //deltaVecLocal.z = 0f;
+
+            deltaVecLocal = Vector3.ClampMagnitude(deltaVecLocal, _maxMagnitude);
 
             var springForce = _posSpring * deltaVecLocal;
             var dampingForce = _posDrag * velocity;
@@ -308,11 +320,16 @@ namespace KineticShift
 
             // Store variables for next frame
             _prevPosition = Bone.TransformPoint(result);
-            _prevVelocity = velocity;
             return result;
         }
 
-        private float _maxRotationAngle = 60f;
+        protected void StoreVariables(Vector3 velocity)
+        {
+
+            _prevVelocity = velocity;
+        }
+
+
         /// <summary>
         /// Calculate the angular change and apply it smoothly.
         /// </summary>
@@ -328,21 +345,26 @@ namespace KineticShift
 
             if (angle > 180f) angle -= 360f;
             
-            var torque = axis * (angle * Mathf.Deg2Rad * _rotationSpring);
+            var torque = axis * (angle * Mathf.Deg2Rad * _torqueAmplifier);
 
             var angularVelocity = _prevAngularVelocity;
-            var dampingTorque = _rotationDrag * angularVelocity;
+            var dampingTorque = _torqueDrag * angularVelocity;
             torque += dampingTorque;
 
             angularVelocity += torque * deltaTime;
 
             var targetRot = Quaternion.Euler(angularVelocity * (Mathf.Rad2Deg * deltaTime)) * prevRot;
-            targetRot = Quaternion.Slerp(currentRot, targetRot, _maxRotationAngle / angle);
+
+            var absAngle = Mathf.Abs(angle);
+            if (absAngle > _maxRotationAngle)
+                targetRot = Quaternion.Slerp(currentRot, targetRot, _maxRotationAngle / absAngle);
+
             _prevRotation = targetRot;
             _prevAngularVelocity = angularVelocity;
 
+
             var result = (Quaternion.Inverse(currentRot) * targetRot).eulerAngles;
-            KS.Logger.LogDebug($"angularVelocity{angularVelocity} torque{torque} targetRot{angularVelocity * (Mathf.Rad2Deg * deltaTime)} result{result} angle{angle}");
+            //KS.Logger.LogDebug($"angularVelocity{angularVelocity} torque{torque} targetRot{angularVelocity * (Mathf.Rad2Deg * deltaTime)} result{result} angle{angle}");
             return result;
            // return (currentRot * Quaternion.Inverse(targetRot)).eulerAngles;
         }
@@ -406,7 +428,7 @@ namespace KineticShift
         //}
 
 
-        protected Vector3 ApplyScaleModification(Vector3 velocity, float deltaTime)
+        protected Vector3 ApplyScaleModification(Vector3 velocity, float deltaTime, float unscaledDeltaTime)
         {
             // Avoid zero vector normalization
             if (velocity == Vector3.zero)
@@ -415,27 +437,28 @@ namespace KineticShift
             }
 
             // Apply Deceleration aka MomentumReversal squash
-            var bigDelta = _scaleScalar * (1f / deltaTime);
+            var scaleDeltaTime = _scaleScalar * unscaledDeltaTime;
 
-            var acceleration = (velocity - _prevVelocity) / deltaTime;
+            var acceleration = (velocity - _prevVelocity);
             var velocityNormalized = velocity.normalized;
             var squashOffset = _squashOffset;
 
-            // Reverse projected acceleration
+            //Reverse projected acceleration
             var deceleration = -Vector3.Project(acceleration, velocityNormalized);
             // Extract scalar projection (not a cosine)
             var decelMagnitude = Vector3.Dot(deceleration, velocityNormalized);
 
-            var boneRight = Bone.right;
-            var boneUp = Bone.up;
-            var boneForward = Bone.forward;
+            var localRot = Bone.localRotation;
 
-            // If strong deceleration
+            var boneRight = localRot * Vector3.right;
+            var boneUp = localRot * Vector3.up;
+            var boneForward = localRot * Vector3.forward;
+            //If strong deceleration
             if (decelMagnitude > 0f) // && velocity.magnitude < prevVelocity.magnitude)
             {
                 var dir = _prevVelocityNormalized;
                 // Small magnitude influence
-                var magnitudeMultiplier = _squashIntensity * decelMagnitude; // * (1f / 10f);
+                var magnitudeMultiplier = _squashIntensity * decelMagnitude * deltaTime; // * (1f / 10f);
                 // Compress along movement axes
                 var squash = new Vector3(
                     Mathf.Clamp01(1f - Mathf.Abs(Vector3.Dot(dir, boneRight)) * magnitudeMultiplier),
@@ -451,21 +474,27 @@ namespace KineticShift
                 var deltaZ = 1f - squash.z;
 
                 var inverseSquash = new Vector3(
-                    squash.x + (deltaX) * 0.5f + deltaY * deltaZ,
-                    squash.y + (deltaY) * 0.5f + deltaX * deltaZ,
-                    squash.z + (deltaZ) * 0.5f + deltaX * deltaY
+                    squash.x + deltaX * 0.5f + deltaY + deltaZ,
+                    squash.y + deltaY * 0.5f + deltaX + deltaZ,
+                    squash.z + deltaZ * 0.5f + deltaX + deltaY
                 );
                 // The smaller the average squash, the more inverse squash
                 squashOffset = Vector3.Lerp(Vector3.one, inverseSquash, 1f - avg);
 
+                //KS.Logger.LogDebug(
+                //    $"magnitudeMultiplier[{magnitudeMultiplier:F2}]" +
+                //    $"squash({squash.x:F2},{squash.y:F2},{squash.z:F2}) " +
+                //    $"inverseSquash({inverseSquash.x:F2},{inverseSquash.y:F2},{inverseSquash.z:F2}) " +
+                //    $"squashOffset({squashOffset.x:F2},{squashOffset.y:F2},{squashOffset.z:F2})"
+                //    );
             }
-            // Smoothly return squash offset to neutral (1,1,1)
-            squashOffset = Vector3.Lerp(squashOffset, Vector3.one, deltaTime * _squashDecaySpeed);
+                // Smoothly return squash offset to neutral (1,1,1)
+                squashOffset = Vector3.Lerp(squashOffset, Vector3.one, unscaledDeltaTime * _squashDecaySpeed);
 
             // Get normalized velocity direction
             //var dir = velocity.normalized;
 
-            var speed = velocity.magnitude * bigDelta;
+            var speed = velocity.magnitude * scaleDeltaTime;
 
             // Calculate stretch scale (bigger with speed)
             var stretchAmount = Mathf.Clamp(1f + speed, 1f, _maxStretchScale);
@@ -487,10 +516,12 @@ namespace KineticShift
                 baseScale.z * (1f + (stretchAmount - 1f) * zStretch)
                 );
 
-            KS.Logger.LogDebug($"stretchAmount[{stretchAmount:F2}] squashAmount[{squashAmount:F2}] " +
-                $"xStretch({xStretch:F2},{yStretch:F2},{zStretch:F2}) " +
-                $"newScale({newScale.x:F2},{newScale.y:F2},{newScale.z:F2}) "
-                );
+
+
+            //KS.Logger.LogDebug($"stretchAmount[{stretchAmount:F2}] squashAmount[{squashAmount:F2}] " +
+            //    $"xStretch({xStretch:F2},{yStretch:F2},{zStretch:F2}) " +
+            //    $"newScale({newScale.x:F2},{newScale.y:F2},{newScale.z:F2}) "
+            //    );
             // Normalize to squash perpendicular axes
             //var stretchRatio = newScale.magnitude / _baseScaleMagnitude;
             newScale = new Vector3(
@@ -500,15 +531,18 @@ namespace KineticShift
             );
 
             newScale = Vector3.Scale(newScale, squashOffset);
+            //newScale.z += _velocityDeltaZ;
             // Smoothly interpolate to new scale
-            var scaleModifier = Vector3.Lerp(_prevScale, newScale, deltaTime * _scaleSmoothing);
-            scaleModifier.z = 1f;
+            var scaleModifier = Vector3.Lerp(_prevScale, newScale, unscaledDeltaTime * _scaleSmoothing);
+            //scaleModifier.z = 1f;
 
-            //KS.Logger.LogDebug($"stretchAmount[{stretchAmount:F2}] squashAmount[{squashAmount:F2}] " +
-            //    $"xStretch({xStretch:F2},{yStretch:F2},{zStretch:F2}) " +
-            //    $"newScale({newScale.x:F2},{newScale.y:F2},{newScale.z:F2}) " +
-            //    $"scaleModifier({scaleModifier.x:F2},{scaleModifier.y:F2},{scaleModifier.z:F2}) " +
-            //    $"velocity({velocity.x:F2},{velocity.y:F2},{velocity.z:F2})");
+            KS.Logger.LogDebug(
+                $"squashOffset({squashOffset.x:F2},{squashOffset.y:F2},{squashOffset.z:F2})" +
+                $"xStretch({xStretch:F2},{yStretch:F2},{zStretch:F2}) " +
+                $"newScale({newScale.x:F2},{newScale.y:F2},{newScale.z:F2}) " +
+                $"scaleModifier({scaleModifier.x:F2},{scaleModifier.y:F2},{scaleModifier.z:F2}) " +
+                $"velocity({velocity.x:F4},{velocity.y:F4},{velocity.z:F4})");
+
             // Store local variables
             _prevVelocityNormalized = velocityNormalized;
             _prevScale = scaleModifier;
