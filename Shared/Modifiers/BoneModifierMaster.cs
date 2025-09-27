@@ -10,14 +10,14 @@ namespace KineticShift
     /// <summary>
     /// Adjust slaves based on the master calculations, apply partial adjustments to the master.
     /// </summary>
-    internal class MasterBoneModifier : BoneModifier
+    internal class BoneModifierMaster : BoneModifier
     {
-        private readonly BoneModifier[] _slaves;
+        private readonly BoneModifierSlave[] _slaves;
 
 
-        internal MasterBoneModifier(
-            Transform master, 
-            BoneModifier[] slaves, 
+        internal BoneModifierMaster(
+            Transform master,
+            BoneModifierSlave[] slaves, 
             BoneModifierData boneModifierData) : base(master, null, null, null, boneModifierData)
         {
             _slaves = slaves;
@@ -26,15 +26,18 @@ namespace KineticShift
 
         internal override void UpdateModifiers(float deltaTime, float unscaledDeltaTime)
         {
-            var positionModifier = ApplyAxialVelocity(unscaledDeltaTime, out var velocity);
-            var rotationModifier = ApplyAngularVelocity(unscaledDeltaTime);
-            var scaleModifier = ApplyScaleModification(velocity, deltaTime, unscaledDeltaTime);
-
+            var positionModifier = GetLinearVelocity(unscaledDeltaTime, out var velocity, out var velocityMagnitude);
+            //var velocity = _prevVelocity;
+            // positionModifier = Vector3.zero;
+            var rotationModifier = Vector3.zero; // GetAngularVelocity(unscaledDeltaTime);
+            var scaleModifier = GetScaleSquash(velocity, velocityMagnitude, deltaTime);
+            BoneModifierData.RotationModifier.z = rotationModifier.z;
+            rotationModifier.z = 0f;
             foreach (var slave in _slaves)
             {
                 slave.UpdateModifiers(positionModifier, rotationModifier, scaleModifier, velocity, Effect.Tethering, deltaTime, unscaledDeltaTime);
             }
-            //BoneModifierData.RotationModifier = new Vector3(0f, 0f, rotationModifier.z);
+            BoneModifierData.RotationModifier = rotationModifier;
             StoreVariables(velocity);
         }
 

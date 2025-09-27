@@ -18,6 +18,7 @@ namespace KineticShift
 
         private BoneEffector _boneEffector;
 
+        private float _degPerSec = 0f;
 
 
         private bool IsHScene
@@ -74,6 +75,7 @@ namespace KineticShift
         protected override void Update()
         {
             base.Update();
+            if (_degPerSec > 0f) ChaControl.transform.rotation = Quaternion.Euler(0f, _degPerSec * Time.deltaTime, 0f) * ChaControl.transform.rotation;
 
             _boneEffector?.OnUpdate();
         }

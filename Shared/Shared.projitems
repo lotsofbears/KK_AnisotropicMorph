@@ -15,7 +15,8 @@
     <Compile Include="$(MSBuildThisFileDirectory)BoneData.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Modifiers\BoneModifier.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)KS.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Modifiers\MasterBoneModifier.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Modifiers\BoneModifierSlave.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Modifiers\BoneModifierMaster.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Modifiers\Effects\Tethering.cs" />
   </ItemGroup>
   <ItemGroup>

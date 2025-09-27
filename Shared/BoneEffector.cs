@@ -14,9 +14,14 @@ namespace KineticShift
     {
         private const string Thigh2R = "cf_d_thigh02_R";
         private const string Thigh1R = "cf_d_thigh01_R";
+
         private const string Bust = "cf_d_bust00";
         private const string Bust1L = "cf_d_bust01_L";
         private const string Bust1R = "cf_d_bust01_R";
+
+        private const string Butt = "cf_j_waist02";
+        private const string ButtL = "cf_d_siri_L";
+        private const string ButtR = "cf_d_siri_R";
         private const float _hugeFrameTime = 1f / 30f;
 
         private readonly ChaControl _chara;
@@ -28,12 +33,15 @@ namespace KineticShift
             [
             //Bust1R,
             //Thigh2R,
+            //ButtL,
+            //ButtR,
             ];
 
         // Master comes first
         private static readonly List<List<string>> _tandemList =
             [
             [ Bust, Bust1L, Bust1R ],
+            //[ Butt, ButtL, ButtR ],
             ];
 
         private bool _updated;
@@ -72,8 +80,13 @@ namespace KineticShift
                 {
                     _returnToABMX.Add(loner);
                     _updateList.Add(boneEnum);
+                    Transform centeredBoneTransform = null;
+                    if (GetCenteredBone(boneEnum, out var centeredBone))
+                    {
+                        FindBone(_chara, centeredBone, out centeredBoneTransform);
+                    }
 
-                    AddToDic(boneEnum, boneTransform, null, bakedMesh, skinnedMesh);
+                    AddToDic(boneEnum, boneTransform, centeredBoneTransform, bakedMesh, skinnedMesh);
                 }
             }
 
@@ -141,31 +154,34 @@ namespace KineticShift
                 }
 
                 // Add and organize slaves
-                var boneModifierSlaves = new BoneModifier[slaves.Length];
+                var boneModifierSlaves = new BoneModifierSlave[slaves.Length];
                 // Bit of an oversight with boneModifierData as modifiers got access
                 // to it much later in the development, so we add it twice on init.
                 var boneModifierDataSlaves = new BoneModifierData[slaves.Length];
                 for (var i = 0; i < slaves.Length; i++)
                 {
                     boneModifierDataSlaves[i] = new();
-                    boneModifierSlaves[i] = new BoneModifier(slaveTransforms[i], masterTransform, bakedMesh, skinnedMesh, boneModifierDataSlaves[i]);
+                    boneModifierSlaves[i] = new BoneModifierSlave(slaveTransforms[i], masterTransform, bakedMesh, skinnedMesh, boneModifierDataSlaves[i]);
                     _mainDic.Add(slaves[i], new BoneData(boneModifierSlaves[i], boneModifierDataSlaves[i]));
                 }
 
                 // Add master with slaves
                 var boneModifierDataMaster = new BoneModifierData();
-                _mainDic.Add(master, new BoneData(new MasterBoneModifier(masterTransform, boneModifierSlaves, boneModifierDataMaster), boneModifierDataMaster));
+                _mainDic.Add(master, new BoneData(new BoneModifierMaster(masterTransform, boneModifierSlaves, boneModifierDataMaster), boneModifierDataMaster));
 
             }
-            //string GetCenteredBone(BoneName boneName)
-            //{
-            //    return boneName switch
-            //    {
-            //        BoneName.Bust1R => Bust,
-            //        _ => "",
-            //    };
-
-            //}
+            bool GetCenteredBone(BoneName boneName, out string centeredBone)
+            {
+                centeredBone = boneName switch
+                {
+                    BoneName.Bust1L => Bust,
+                    BoneName.Bust1R => Bust,
+                    BoneName.ButtL => Butt,
+                    BoneName.ButtR => Butt,
+                    _ => "",
+                };
+                return !centeredBone.IsNullOrEmpty();
+            }
         }
 
         public override IEnumerable<string> GetAffectedBones(BoneController origin) => _returnToABMX;
@@ -183,6 +199,10 @@ namespace KineticShift
                 Bust1L => _mainDic[BoneName.Bust1L].boneModifierData,
                 Bust1R => _mainDic[BoneName.Bust1R].boneModifierData,
                 Thigh2R => _mainDic[BoneName.Thigh2R].boneModifierData,
+                Butt => _mainDic[BoneName.Butt].boneModifierData,
+                ButtL => _mainDic[BoneName.ButtL].boneModifierData,
+                ButtR => _mainDic[BoneName.ButtR].boneModifierData,
+
                 _ => null
             };
 
@@ -190,12 +210,13 @@ namespace KineticShift
         private void UpdateModifiers()
         {
             var deltaTime = Time.deltaTime;
+            if (deltaTime == 0f) return;
             var unscaledDeltaTime = Time.unscaledDeltaTime;
             if (deltaTime > _hugeFrameTime) deltaTime = _hugeFrameTime;
 
-            foreach (var boneNameEnum in _updateList)
+            foreach (var entry in _updateList)
             {
-                _mainDic[boneNameEnum].boneModifier.UpdateModifiers(deltaTime, unscaledDeltaTime);
+                _mainDic[entry].boneModifier.UpdateModifiers(deltaTime, unscaledDeltaTime);
             }
         }
         internal void OnConfigUpdate()
@@ -204,7 +225,10 @@ namespace KineticShift
         }
         internal void OnChangeAnimator()
         {
-
+            foreach (var entry in _updateList)
+            {
+                _mainDic[entry].boneModifier.OnChangeAnimator();
+            }
         }
         internal void OnSetPlay(string animName)
         {
@@ -219,6 +243,9 @@ namespace KineticShift
                 Bust1L => BoneName.Bust1L,
                 Bust1R => BoneName.Bust1R,
                 Thigh2R => BoneName.Thigh2R,
+                Butt => BoneName.Butt,
+                ButtL => BoneName.ButtL,
+                ButtR => BoneName.ButtR,
                 _ => BoneName.None
             };
             return enumBoneName != BoneName.None;
@@ -230,6 +257,9 @@ namespace KineticShift
             Bust1L,
             Bust1R,
             Bust,
+            Butt,
+            ButtL,
+            ButtR,
             Thigh2R,
         }
     }
