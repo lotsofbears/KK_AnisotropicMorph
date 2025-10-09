@@ -1,6 +1,5 @@
 ﻿using ADV.Commands.Base;
 using KKABMX.Core;
-using Shared;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -8,7 +7,7 @@ using System.Text;
 using UnityEngine;
 using static ExpressionBone;
 
-namespace KineticShift
+namespace AniMorph
 {
     internal class BoneEffector : BoneEffect
     {
@@ -51,6 +50,7 @@ namespace KineticShift
             _chara = chara;
 
             Setup();
+            OnConfigUpdate();
         }
 
         internal void OnUpdate()
@@ -66,7 +66,7 @@ namespace KineticShift
 
             if (skinnedMesh == null)
             {
-                KS.Logger.LogDebug($"{GetType().Name} couldn't find mesh.");
+                AniMorph.Logger.LogDebug($"{GetType().Name} couldn't find mesh.");
                 return;
             }
             var bakedMesh = new Mesh();
@@ -221,8 +221,14 @@ namespace KineticShift
         }
         internal void OnConfigUpdate()
         {
-
+            // Go over all bone modifiers and cache settings into private instance fields.
+            BoneModifier.UpdateSettings();
+            foreach (var value in _mainDic.Values)
+            {
+                value.boneModifier.OnConfigUpdate();
+            }
         }
+
         internal void OnChangeAnimator()
         {
             foreach (var entry in _updateList)

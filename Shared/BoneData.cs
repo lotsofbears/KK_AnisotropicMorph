@@ -3,7 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace KineticShift
+namespace AniMorph
 {
     internal readonly struct BoneData
     {

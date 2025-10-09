@@ -3,16 +3,15 @@ using KKAPI;
 using KKAPI.Chara;
 using KKAPI.Utilities;
 using Manager;
-using Shared;
 using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Text;
 using UnityEngine;
 
-namespace KineticShift
+namespace AniMorph
 {
-    internal class KSCharaController : CharaCustomFunctionController
+    internal class AniMorphCharaController : CharaCustomFunctionController
     {
         public BoneEffector BoneEffector => _boneEffector;
 
@@ -36,8 +35,14 @@ namespace KineticShift
         protected override void Start()
         {
             base.Start();
-
-            StartCoroutine(StartCo());
+            if (!IsHScene || ChaControl == null || ChaControl.sex == 0)
+            {
+                Destroy(this);
+            }
+            else
+            {
+                StartCoroutine(StartCo());
+            }
         }
 
         private IEnumerator StartCo()
@@ -46,35 +51,34 @@ namespace KineticShift
             var endOfFrame = CoroutineUtils.WaitForEndOfFrame;
             while (Time.deltaTime > 1f / 30f) // || count++ < 1000)
             {
+                AniMorph.Logger.LogDebug("StartCo:deltaTime wait");
                 yield return endOfFrame;
             }
-            if (!IsHScene || ChaControl == null || ChaControl.sex == 0)
+
+            var boneController = ChaControl.GetComponent<BoneController>();
+            if (boneController == null)
             {
+                AniMorph.Logger.LogDebug("StartCo:no bone controller");
                 Destroy(this);
             }
             else
             {
-                var boneController = ChaControl.GetComponent<BoneController>();
-                if (boneController == null)
+                if (_boneEffector == null)
                 {
-                    Destroy(this);
+                    AniMorph.Logger.LogDebug("StartCo:no boneEffector");
+                    _boneEffector = new BoneEffector(ChaControl);
+                    boneController.AddBoneEffect(_boneEffector);
                 }
-                else
-                {
-                    if (_boneEffector == null)
-                    {
-                        _boneEffector = new BoneEffector(ChaControl);
-                        boneController.AddBoneEffect(_boneEffector);
-                    }
 
-                }
             }
-            enabled = KS.Enable.Value;
+            //enabled = AniM.Enable.Value;
         }
 
         protected override void Update()
         {
             base.Update();
+
+            // DEBUG 
             if (_degPerSec > 0f) ChaControl.transform.rotation = Quaternion.Euler(0f, _degPerSec * Time.deltaTime, 0f) * ChaControl.transform.rotation;
 
             _boneEffector?.OnUpdate();

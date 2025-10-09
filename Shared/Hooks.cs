@@ -4,7 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace KineticShift
+namespace AniMorph
 {
     internal class Hooks
     {
@@ -49,12 +49,12 @@ namespace KineticShift
         [HarmonyPatch(typeof(HSceneProc), nameof(HSceneProc.ChangeAnimator))]
         public static void HSceneProc_ChangeAnimator_Postfix(HSceneProc.AnimationListInfo _nextAinmInfo)
         {
-            var type = typeof(KSCharaController);
+            var type = typeof(AniMorphCharaController);
             foreach (var charaController in CharacterApi.GetBehaviours())
             {
                 if (charaController != null && charaController.GetType() == type)
                 {
-                    ((KSCharaController)charaController).BoneEffector.OnChangeAnimator();
+                    ((AniMorphCharaController)charaController).BoneEffector.OnChangeAnimator();
                 }
             }
         }
@@ -64,12 +64,12 @@ namespace KineticShift
         [HarmonyPatch(typeof(HActionBase), nameof(HActionBase.SetPlay))]
         public static void HActionBase_SetPlay_Postfix(string _nextAnimation)
         {
-            var type = typeof(KSCharaController);
+            var type = typeof(AniMorphCharaController);
             foreach (var charaController in CharacterApi.GetBehaviours())
             {
                 if (charaController != null && charaController.GetType() == type)
                 {
-                    ((KSCharaController)charaController).BoneEffector.OnSetPlay(_nextAnimation);
+                    ((AniMorphCharaController)charaController).BoneEffector.OnSetPlay(_nextAnimation);
                 }
             }  
         }

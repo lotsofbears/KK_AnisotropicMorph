@@ -1,7 +1,6 @@
 ﻿using BepInEx;
 using BepInEx.Configuration;
 using BepInEx.Logging;
-using KineticShift;
 using KKAPI;
 using KKAPI.Chara;
 using KKAPI.Utilities;
@@ -9,8 +8,9 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using UnityEngine;
+using static AniMorph.BoneModifier;
 
-namespace Shared
+namespace AniMorph
 {
     [BepInPlugin(GUID, Name, Version)]
     [BepInProcess(KoikatuAPI.GameProcessName)]
@@ -18,10 +18,10 @@ namespace Shared
 #if KK
     [BepInProcess(KoikatuAPI.GameProcessNameSteam)]
 #endif
-    internal class KS : BaseUnityPlugin
+    internal class AniMorph : BaseUnityPlugin
     {
-        public const string GUID = "KineticShift.ABMX";
-        public const string Name = "KineticShift.ABMX";
+        public const string GUID = "AniMorph.ABMX";
+        public const string Name = "Anisotropic Morph";
         public const string Version = "0.1";
 
 
@@ -29,6 +29,7 @@ namespace Shared
         internal new static ManualLogSource Logger;
 
         public static ConfigEntry<bool> Enable;
+        public static ConfigEntry<Effect> Effects;
 
         private void Awake()
         {
@@ -36,14 +37,19 @@ namespace Shared
 
             Enable = Config.Bind("", "Enable", true, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 100 }));
 
-            CharacterApi.RegisterExtraBehaviour<KSCharaController>(GUID);
-            AddSettingChangedParam();
+            Effects = Config.Bind("", "Effects", Effect.Linear | Effect.Angular | Effect.Tethering, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 90 }));
+
+            CharacterApi.RegisterExtraBehaviour<AniMorphCharaController>(GUID);
+
+            Effects.SettingChanged += (_, _) => UpdateConfig();
+
+            //AddSettingChangedParam();
         }
 
 
         private void AddSettingChangedParam()
         {
-            var field = typeof(KS).GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+            var field = typeof(AniMorph).GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
 
             var configTypeVector = typeof(ConfigEntry<Vector3>);
             var configTypeFloat = typeof(ConfigEntry<float>);
@@ -66,12 +72,12 @@ namespace Shared
 
         private void UpdateConfig()
         {
-            var type = typeof(KSCharaController);
+            var type = typeof(AniMorphCharaController);
             foreach (var charaController in CharacterApi.GetBehaviours())
             {
                 if (charaController != null && charaController.GetType() == type)
                 {
-                    ((KSCharaController)charaController).BoneEffector.OnConfigUpdate();
+                    ((AniMorphCharaController)charaController).BoneEffector.OnConfigUpdate();
                 }
             }
         }

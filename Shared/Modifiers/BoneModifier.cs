@@ -2,14 +2,14 @@
 using ADV.Commands.Object;
 using KKABMX.Core;
 using MessagePack.Decoders;
-using Shared;
 using System;
 using System.Collections.Generic;
 using System.Text;
 using UnityEngine;
+using UnityEngine.UI.CoroutineTween;
 using static RootMotion.FinalIK.IKSolver;
 
-namespace KineticShift
+namespace AniMorph
 {
     internal class BoneModifier
     {
@@ -23,62 +23,100 @@ namespace KineticShift
         private readonly float _height;
         // Width / Height ratio
         private readonly float _width;
-
-
-        private float _posSpring = 1f;
-        private float _posDamping = 1f;
-        private float _posDrag = -5f;
-        private float _maxMagnitude = 0.1f;
-        
-        // Amplifier for angular rotation
-        private float _torqueAmplifier = 10f;
-        // Resistance for angular rotation
-        private float _torqueDrag = -2f;
+                
 
         private float _maxRotationAngle = 45f;
 
-        private float _scaleScalar = 1f;
         // Max scale along velocity axis
         private float _scaleMaxStretch = 0.4f;
         //// Min scale on perpendicular axes
         //private float _minSquashScale = 0.67f;
-        // Smoothing factor for scale change
-        private float _scaleSmoothing = 5f;
-        // How strong the deceleration squash is
-        private float _squashIntensity = 10000f;
-        // How quickly the squash effect fades
-        // Bigger => faster
-        private float _squashDecaySpeed = 3f;
+
+        protected bool _isLeftPosition;
+
         // localScale.x * localScale.y * localScale.z
         private float _originalVolume;
         private readonly float _baseScaleMagnitude;
-        // Momentum reversal squash offset
-        private Vector3 _squashOffset;
-        //// Movement speed
-        //private Vector3 _velocity;
-        // Movement direction with magnitude 1f
-        private Vector3 _velocityNormalized;
+
         // Snapshots of previous frame
         protected Vector3 _prevVelocity;
-        protected Vector3 _prevVelocityNormalized;
         protected Vector3 _prevAngularVelocity;
         protected Vector3 _prevPosition;
         protected Vector3 _prevScale;
-        // Or aceleration depending on the sign
-       // protected float _prevDeceleration;
-       // private bool _waitForDeceleration;
 
-        private float _velocityDeltaZ;
+
+        // Linear variables and properties
+
+        //public float restLength = 0f;
+        private float _linearSpringStrength = 25f;
+        private float _linearDamping = 10f;
+        private bool _linearGravity;
+        private Vector3 _linearGravityForce = new(0f, 0f, 0f);
+        private float _massMultiplier = 1f;
+        private float _mass = 1f;
+        private float _maxVelocity = 1f;
+        private float _maxSqrVelocity = 1f;
+
+        private float GetMassMultiplier
+        {
+            get
+            {
+                return _mass;
+            }
+            set
+            {
+                _massMultiplier = 1f / value;
+            }
+        }
+        private void SetMaxVelocity(float value)
+        {
+            _maxVelocity = value;
+            _maxSqrVelocity = value * value;
+        }
+
+
+        // Angular variables and properties
+
+
+        private float _angularSpringStrength = 30f;
+        private float _angularDamping = 5f;
+
+
+        // Scale variables and properties
+
+
+        // How much the scale stretches along velocity direction.
+        public float _scaleAccelerationFactor = 20f; //0.01f;
+        // How much to squash along deceleration axis
+        public float _scaleDecelerationFactor = 0.01f;
+        // How fast squash reacts
+        public float _scaleLerpSpeed = 10f;
+        // Max squash on deceleration
+        public float _scaleMaxDistortion = 0.4f;
+
+
+        // Gravity variables and properties
+
+
+        private Vector3 _dotUpUp = Vector3.zero;
+        private Vector3 _dotUpMiddle = new Vector3(0f, 0.03f, 0f);
+        private Vector3 _dotUpDown = new Vector3(0f, 0.05f, 0f);
+
+        private Vector3 _dotFwdUp;
+        private Vector3 _dotFwdMiddle;
+        private Vector3 _dotFwdDown;
+
+        private Vector3 _dotRUp = new Vector3(-0.025f, -0.02f, 0f);
+        private Vector3 _dotRMiddle;
+        private Vector3 _dotRDown = new Vector3(0.025f, -0.02f, 0f);
+
+
         // Pseudo previous as we use dead reckoning and have no way to know,
         // Synchronized periodically when animator changes states.
         private Quaternion _prevRotation;
         protected readonly BoneModifierData BoneModifierData;
 
-
-        //private float _velocity;
-        //private float _kineticEnergy;
-        //private float _damping 
-        //private float _dampingLimit = 0.1f;
+        
         /// <summary>
         /// 
         /// </summary>
@@ -90,7 +128,7 @@ namespace KineticShift
         {
             if (bone == null)
             {
-                KS.Logger.LogError($"{this.GetType().Name} wasn't initialized due to wrong argument");
+                AniMorph.Logger.LogError($"{this.GetType().Name} wasn't initialized due to wrong argument");
                 return;
             }
 
@@ -102,7 +140,14 @@ namespace KineticShift
             _baseScaleMagnitude = bone.localScale.magnitude;
 
             if (centeredBone != null)
+            {
                 Tethering = new Tethering(centeredBone, _prevPosition);
+
+                var localBonePosition = centeredBone.InverseTransformPoint(bone.position);
+                var divider = Mathf.Abs(localBonePosition.x) + Mathf.Abs(localBonePosition.z);
+                var result = divider == 0f ? (0f) : (localBonePosition.x / divider);
+                _isLeftPosition = result < 0f;
+            }
 
             // Skip mesh measurements
             if (bakedMesh == null || skinnedMesh == null) return;
@@ -142,7 +187,7 @@ namespace KineticShift
             {
                 if (closestDist[i] == Mathf.Infinity)
                 {
-                    KS.Logger.LogError($"{this.GetType().Name} couldn't find the intersection point[{i}].");
+                    AniMorph.Logger.LogError($"{this.GetType().Name} couldn't find the intersection point[{i}].");
                 }
             }
             _height = closestDist[0] + closestDist[1];
@@ -187,176 +232,21 @@ namespace KineticShift
         /// </summary>
         internal virtual void UpdateModifiers(float deltaTime, float unscaledDeltaTime)
         {
-            //// Position calculation
-            //var currentPosition = Bone.position;
-            //var deltaVecLocal = Bone.InverseTransformPoint(_prevPosition);
-            ////deltaVector = Bone.TransformVector(deltaVector);
-
-            //var velocity = _velocity;
-            //var springForce = _posSpring * deltaVecLocal;
-            //var dampingForce = _posDrag * velocity;
-            //var force = (springForce + dampingForce) * deltaTime;
-
-            //velocity = (velocity + force) * deltaTime;
-            ////positionModifier = deltaVector - velocity * delta;
-            ////var newPosition = _prevPosition + velocity; // - targetPosition);
             var boneModifierData = BoneModifierData;
-            boneModifierData.PositionModifier = GetLinearVelocity(unscaledDeltaTime, out var velocity, out var velocityMagnitude);
-            ////positionModifier = deltaVecLocal - velocity;  //Bone.TransformVector(newPosition - currentPosition);
+            boneModifierData.PositionModifier = GetLinearOffset(unscaledDeltaTime, out var velocity, out var velocityMagnitude);
+           
+            var rotMod = GetAngularOffset(unscaledDeltaTime);
 
+            boneModifierData.RotationModifier = rotMod + Tethering.GetTetheringOffset(velocity, deltaTime);
 
-            //// Rotation calculation
-            //var currentRot = Bone.rotation;
-            //var prevRot = _prevRotation;
-            //var deltaRot = currentRot * Quaternion.Inverse(prevRot);
-
-            ////var targetRot = currentRot;
-
-            //deltaRot.ToAngleAxis(out var angle, out var axis);
-
-            //// Due to (probably) the type being float we wont arrive at the target with this method,
-            //// and instead will get stuck in tiny numbers.
-            //// To avoid micro glitches/restless behavior we settle down with 0.1f. Epsilon is too big.
-            ////if (angle > 0.1f)
-            ////{
-            //    if (angle > 180f) angle -= 360f;
-
-            //    var torque = axis * (angle * Mathf.Deg2Rad * _rotSpring);
-
-            //    var angularVelocity = _prevAngularVelocity;
-            //    var dampingTorque = _rotDrag * angularVelocity;
-            //    torque += dampingTorque;
-
-            //    angularVelocity += torque * deltaTime;
-
-            //    var targetRot = Quaternion.Euler(angularVelocity * (Mathf.Rad2Deg * deltaTime)) * prevRot;
-            //    rotationModifier = (currentRot * Quaternion.Inverse(targetRot)).eulerAngles;
-            var rotMod = GetAngularVelocity(unscaledDeltaTime);
-
-            boneModifierData.RotationModifier = rotMod + Tethering.ApplyAdvancedTethering(velocity, deltaTime);
-
-            //KS.Logger.LogDebug($"rotationModifier({rotationModifier.x:F2},{rotationModifier.y:F2},{rotationModifier.z:F2})");
-            boneModifierData.ScaleModifier = GetScaleSquash(velocity, velocityMagnitude, deltaTime);
-            //}
-
-            //ApplyScaleModification(velocity, deltaTime, out scaleModifier);
-
-            // Using actual position from this LateUpdate before IK has updated
-            //// Will be problematic when some other bone modifier nearby is in play.
-            //_prevPosition = Bone.TransformPoint(boneModifierData.PositionModifier);
-            //_prevVelocity = velocity;
+            //boneModifierData.ScaleModifier = GetScaleDistortion(velocity, velocityMagnitude, deltaTime);
             StoreVariables(velocity);
         }
 
-        ///// <summary>
-        ///// Calculate the axial change and apply it smoothly.
-        ///// </summary>
-        ///// <param name="velocity">Local variable ready for use by further methods.</param>
-        ///// <returns>Vector3 ready for ABMX use</returns>
-        //protected Vector3 ApplyAxialVelocityEx(float deltaTime, out Vector3 velocity)
-        //{
-        //    velocity = _prevVelocity;
-
-        //    var currentPosition = Bone.position;
-             
-        //    var deltaVecLocal = Bone.InverseTransformPoint(_prevPosition);
-        //    // Strip Z axis
-        //    _velocityDeltaZ = deltaVecLocal.z;
-
-        //    //deltaVecLocal.z = 0f;
-
-        //    deltaVecLocal = Vector3.ClampMagnitude(deltaVecLocal, _maxMagnitude);
-
-
-        //    // Scale delta up
-        //    var springForce = _posSpring * deltaVecLocal;
-        //    // Apply drag to previous velocity (scaled with deltaTime previously)
-        //    var dampingForce = _posDrag * velocity;
-        //    // Scale with deltaTime
-        //    var force = (springForce + dampingForce) * deltaTime;
-
-        //    velocity += force * deltaTime;
-        //    velocity *= deltaTime;
-        //    //positionModifier = deltaVector - velocity * delta;
-        //    //var newPosition = _prevPosition + velocity; // - targetPosition);
-
-        //    // Adjust movement based on current velocity
-        //    var result = deltaVecLocal - velocity;
-
-        //    // Store variables for next frame
-        //    KS.Logger.LogDebug($"Dot:{Vector3.Dot(_prevVelocityNormalized, Vector3.up)} magnitude:{deltaVecLocal.magnitude}");
-        //    _prevPosition = Bone.TransformPoint(result);
-        //    return result;
-        //}
-        //protected Vector3 ApplyAxialVelocityExEx(float deltaTime, out Vector3 velocity)
-        //{
-        //    velocity = _prevVelocity;
-
-        //    var currentPosition = Bone.position;
-
-        //    var deltaVecLocal = Bone.InverseTransformPoint(_prevPosition);
-        //    // Strip Z axis
-        //    _velocityDeltaZ = deltaVecLocal.z;
-
-        //    //deltaVecLocal.z = 0f;
-
-
-        //    var springForce = _posSpring * deltaVecLocal;
-        //    var dampingForce = _posDrag * velocity;
-        //    var force = (springForce + dampingForce) * deltaTime;
-
-        //    velocity += dampingForce * deltaTime;
-        //    //positionModifier = deltaVector - velocity * delta;
-        //    //var newPosition = _prevPosition + velocity; // - targetPosition);
-
-        //    // Adjust movement based on current velocity
-        //    var result = deltaVecLocal - velocity;
-        //    //result = SmoothStep(Vector3.zero, deltaVecLocal, result);
-
-        //    KS.Logger.LogDebug($"magnitude:{result.magnitude} velocity({velocity.x:F4},{velocity.y:F4},{velocity.z:F4})");
-        //    result = Vector3.ClampMagnitude(result, _maxMagnitude);
-
-            
-        //    // Store variables for next frame
-        //    _prevPosition = Bone.TransformPoint(result);
-        //    return result;
-        //}
-
-        //[Tooltip("Rest length of the spring. 0 means the child tries to stay on the parent.")]
-        //public float restLength = 0f;
-
-        // [Tooltip("Spring stiffness: higher values mean a tighter spring.")]
-        public float springStrength = 50f;
-        [Tooltip("Damping: reduces oscillation over time.")]
-        public float damping = 10f;
-        private Vector3 _gravityForce = new(0f, 0f, 0f);
-        private float _dampCoef = 1f;
-        private float GetMassMultiplier
-        {
-            get
-            {
-                return _mass;
-            }
-            set
-            {
-                _massMultiplier = 1f / value;
-            }
-        }
-        private float _massMultiplier = 1f;
-        private float _mass = 1f;
-
-        private void SetMaxVelocity(float value)
-        {
-            _maxVelocity = value;
-            _maxSqrVelocity = value * value;
-        }
-        private float _maxVelocity = 1f;
-        private float _maxSqrVelocity = 1f;
 
         // Implementation with Hooke's Law 
-        protected Vector3 GetLinearVelocity(float deltaTime, out Vector3 velocity, out float velocityMagnitude)
+        protected Vector3 GetLinearOffset(float deltaTime, out Vector3 velocity, out float velocityMagnitude)
         {
-
             velocity = _prevVelocity;
 
             var localDelta = Bone.InverseTransformPoint(_prevPosition);
@@ -370,11 +260,11 @@ namespace KineticShift
 
             //var stretch = currentLength - restLength;
             // F_spring = -k * x
-            var springForce = -springStrength * localDeltaMagnitude * direction;
+            var springForce = -_linearSpringStrength * localDeltaMagnitude * direction;
             // F_damp = -c * v
-            var dampingForce = -damping * velocity;
+            var dampingForce = -_linearDamping * velocity;
             // Apply gravity force
-            var gravityForce = _mass * Bone.InverseTransformDirection(_gravityForce);
+            var gravityForce = _mass * Bone.InverseTransformDirection(_linearGravityForce);
 
             // Forces combined
             var totalForce = springForce + dampingForce + gravityForce;
@@ -402,10 +292,7 @@ namespace KineticShift
             return result;
         }
 
-        [Tooltip("Rotational spring stiffness (torque strength).")]
-        public float angularSpringStrength = 30f;
-        public float angularDamping = 5f;
-        protected Vector3 GetAngularVelocity(float deltaTime)
+        protected Vector3 GetAngularOffset(float deltaTime)
         {
             var currentRotation = Bone.rotation;
             var prevRotation = _prevRotation;
@@ -421,8 +308,8 @@ namespace KineticShift
 
             var angularVelocity = _prevAngularVelocity;
 
-            var torque = angularSpringStrength * angle * axis;
-            var damping = -angularDamping * angularVelocity;
+            var torque = _angularSpringStrength * angle * axis;
+            var damping = -_angularDamping * angularVelocity;
 
             angularVelocity += (torque + damping) * deltaTime;
 
@@ -436,7 +323,7 @@ namespace KineticShift
 
             var result = (Quaternion.Inverse(currentRotation) * newRotation).eulerAngles;
            // _prevRotation = Quaternion.Euler(result) * _prevRotation;
-            KS.Logger.LogDebug($"angle[{angle}] delta{deltaRotation.eulerAngles} result{result} adj{_prevRotation.eulerAngles}");
+            AniMorph.Logger.LogDebug($"angle[{angle}] delta{deltaRotation.eulerAngles} result{result} adj{_prevRotation.eulerAngles}");
             return result;
         }
 
@@ -456,116 +343,8 @@ namespace KineticShift
         }
 
 
-        ///// <summary>
-        ///// Calculate the angular change and apply it smoothly.
-        ///// </summary>
-        ///// <returns>Euler Vector3 ready for ABMX use.</returns>
-        //protected Vector3 GetAngularVelocityOld(float deltaTime)
-        //{
-        //    var currentRot = Bone.rotation;
-        //    var prevRot = _prevRotation;
-        //    var deltaRot = currentRot * Quaternion.Inverse(prevRot);
 
-        //    deltaRot.ToAngleAxis(out var angle, out var axis);
-
-        //    if (angle > 180f) angle -= 360f;
-
-        //    var torque = axis * (angle * Mathf.Deg2Rad * _torqueAmplifier);
-
-        //    var angularVelocity = _prevAngularVelocity;
-        //    var dampingTorque = _torqueDrag * angularVelocity;
-        //    torque += dampingTorque;
-
-        //    angularVelocity += torque * deltaTime;
-
-        //    var targetRot = Quaternion.Euler(angularVelocity * (Mathf.Rad2Deg * deltaTime)) * prevRot;
-
-        //    var absAngle = Mathf.Abs(angle);
-        //    if (absAngle > _maxRotationAngle)
-        //        targetRot = Quaternion.Slerp(currentRot, targetRot, _maxRotationAngle / absAngle);
-
-        //    _prevRotation = targetRot;
-        //    _prevAngularVelocity = angularVelocity;
-
-        //    var result = (Quaternion.Inverse(currentRot) * targetRot).eulerAngles;
-
-        //    KS.Logger.LogDebug($"angle[{angle}] vel({angularVelocity.x:F4},{angularVelocity.y:F4},{angularVelocity.z:F4}) targetRot({targetRot.x:F4},{targetRot.y:F4},{targetRot.z:F4})");
-        //    //var result = (Quaternion.Inverse(currentRot) * targetRot).eulerAngles;
-        //    //KS.Logger.LogDebug($"angularVelocity{angularVelocity} torque{torque} targetRot{angularVelocity * (Mathf.Rad2Deg * deltaTime)} result{result} angle{angle}");
-        //    return result;
-        //   // return (currentRot * Quaternion.Inverse(targetRot)).eulerAngles;
-        //}
-
-        //private float _multiplier = 10f;
-        //// Limit of rotation
-        //private float _maxAngle = 60f;
-        //// How strongly it springs back
-        //private float _springStiffness = 5f;
-        ////// How quickly it settles
-        ////private float _damping = 2f;
-        //// Natural frequency of bounce
-        //private float _frequency = 1.3f; // 2f; // 4f;
-        //[Range(0f, 1f)]
-        //// 0 = undamped, 1 = critically damped
-        //private float _dampingRatio = 0.3f;
-        ////// How responsive the spring is
-        ////private float _response = 1f;
-
-        //private Vector3 _springVelocity;
-        //private Vector3 _tetherRotationEuler;
-        //// Current rotation offset
-        //private Vector3 _springPosition;
-        //protected Vector3 ApplyAngularVelocity(float deltaTime)
-        //{
-        //    var currentRot = Bone.rotation;
-        //    var prevRot = _prevRotation;
-        //    var deltaRot = currentRot * Quaternion.Inverse(prevRot);
-
-        //    deltaRot.ToAngleAxis(out var angle, out var axis);
-
-        //    if (angle > 180f) angle -= 360f;
-
-        //    var angularVelocity = axis * angle * _multiplier;
-
-        //    var targetEuler = angularVelocity;
-
-        //    targetEuler = Vector3.ClampMagnitude(targetEuler, _maxAngle);
-
-        //    _springPosition = DampedSpring(_springPosition, targetEuler, ref _springVelocity, _frequency, _dampingRatio, deltaTime);
-
-        //    _prevRotation = Quaternion.Euler(_springPosition) * currentRot;
-
-        //    KS.Logger.LogDebug($"angularVelocity{angularVelocity} targetEuler{targetEuler} angle{angle}");
-        //    return _springPosition;
-        //}
-
-        //private Vector3 DampedSpring(Vector3 current, Vector3 target, ref Vector3 velocity, float freq, float damp, float dt)
-        //{
-        //    float omega = 2f * Mathf.PI * freq;
-        //    float zeta = damp;
-        //    float omegaZeta = omega * zeta;
-        //    float omegaSq = omega * omega;
-
-        //    Vector3 f = velocity + omegaZeta * (current - target);
-        //    Vector3 a = -omegaSq * (current - target) - 2f * omegaZeta * f;
-
-        //    velocity += a * dt;
-        //    return current + velocity * dt;
-
-        //}
-
-
-        [Tooltip("How much the scale stretches along velocity direction.")]
-        public float _scaleStretchFactor = 20f; //0.01f;
-        // How much to squash along deceleration axis
-        public float _scaleDecelerationSquashFactor = 0.01f;
-        // How fast squash reacts
-        public float _scaleSquashLerpSpeed = 10f;
-        // Max squash on deceleration
-        public float _maxSquash = 0.4f;
-        private bool _enableDirectionalSquash = false;
-        private bool _enableDecelerationSquash = true;
-        protected Vector3 GetScaleSquash(Vector3 velocity, float velocityMagnitude, float deltaTime)
+        protected Vector3 GetScaleDistortion(Vector3 velocity, float velocityMagnitude, float deltaTime, bool acceleration,  bool deceleration)
         {
             if (velocityMagnitude == 0f) return Vector3.one;
 
@@ -576,28 +355,29 @@ namespace KineticShift
             var absVelocityDir = new Vector3(Mathf.Abs(velocityDir.x), Mathf.Abs(velocityDir.y), Mathf.Abs(velocityDir.z));
 
             // Initialize stretch as neutral
-            Vector3 stretch = Vector3.one;
+            Vector3 distortion = Vector3.one;
 
-            if (_enableDirectionalSquash)
+            if (acceleration)
             {
-                stretch += absVelocityDir * (_scaleStretchFactor * velocityMagnitude);
+                distortion += absVelocityDir * (_scaleAccelerationFactor * velocityMagnitude);
                 // Clamp directional stretch
                 var floor = 1f - _scaleMaxStretch;
                 var ceiling = 1f + _scaleMaxStretch;
-                stretch = new Vector3(
-                    Mathf.Clamp(stretch.x, floor, ceiling),
-                    Mathf.Clamp(stretch.y, floor, ceiling),
-                    Mathf.Clamp(stretch.z, floor, ceiling)
+                distortion = new Vector3(
+                    Mathf.Clamp(distortion.x, floor, ceiling),
+                    Mathf.Clamp(distortion.y, floor, ceiling),
+                    Mathf.Clamp(distortion.z, floor, ceiling)
                     );
+                AniMorph.Logger.LogDebug($"Acceleration:distortion{distortion}");
             }
             // Look for decreasing deceleration (check from previous frame)
             // and increasing acceleration for momentum reversal squash.
-            if (_enableDecelerationSquash)
+            if (deceleration)
             {
-                var acceleration = (velocity - prevLocalVelocity) * (1f / deltaTime);
+                var accelerationVec = (velocity - prevLocalVelocity) * (1f / deltaTime);
 
                 // Project acceleration onto direction to get deceleration if negative
-                var deceleration = Vector3.Dot(acceleration, velocityDir);
+                var decelerationDot = Vector3.Dot(accelerationVec, velocityDir);
 
                 // If deceleration – look for decreasing velocity, if acceleration – look for increasing
                 //var prevAcceleration = _prevAcceleration;
@@ -610,39 +390,39 @@ namespace KineticShift
 
                 // We are after the last moments of deceleration and early moments of acceleration
                 // after that the cycle repeats
-                if (deceleration > 0f)
+                if (decelerationDot > 0f)
                 {
                     // Get squash amount
-                    var squashAmount = deceleration * _scaleDecelerationSquashFactor;
+                    var squashAmount = decelerationDot * _scaleDecelerationFactor;
                     // Clamp squash amount
-                    squashAmount = Mathf.Clamp(squashAmount, 0f, _maxSquash);
+                    squashAmount = Mathf.Clamp(squashAmount, 0f, _scaleMaxDistortion);
                     // Apply squash amount to velocity axes
                     var squashScale = Vector3.one + (-absVelocityDir * squashAmount);
                     // Expand perpendicular axes
                     var perpendicularScale = Vector3.one + (Vector3.one - absVelocityDir) * (squashAmount * 0.5f);
-                    // Multiply scale vectors
+                    // Combine vectors
                     squashScale = Vector3.Scale(squashScale, perpendicularScale);
 
-                    stretch = Vector3.Scale(stretch, squashScale);
+                    distortion = Vector3.Scale(distortion, squashScale);
 
                     // 
                     //_waitForDeceleration = false;
 
-                    KS.Logger.LogDebug($"reverseMoment[{deceleration < 0f}]:{deceleration:F3} DecelerationStretch({stretch.x:F3},{stretch.y:F3},{stretch.z:F3})");
+                    AniMorph.Logger.LogDebug($"Deceleration:reverseMoment:dot[{decelerationDot:F3}] squashAmount[{squashAmount:F3}] squashScale({squashScale.x:F3},{squashScale.y:F3},{squashScale.z:F3}) distortion({distortion.x:F3},{distortion.y:F3},{distortion.z:F3})");
                 }
                 else
                 {
-                    KS.Logger.LogDebug($"reverseMoment[{deceleration < 0f}]:{deceleration:F3}");
+                    AniMorph.Logger.LogDebug($"Deceleration:dot[{decelerationDot}]");
                     //_waitForDeceleration = true;
                 }
                   
                 //_prevDeceleration = deceleration;
             }
             // Preserve original volume
-            var stretchVolume = stretch.x * stretch.y * stretch.z;
+            var stretchVolume = distortion.x * distortion.y * distortion.z;
             var volumeCorrection = Mathf.Pow(_originalVolume / stretchVolume, (1f / 3f));
 
-            var finalScale = Vector3.Lerp(_prevScale, stretch * volumeCorrection, deltaTime * _scaleSquashLerpSpeed);
+            var finalScale = Vector3.Lerp(_prevScale, distortion * volumeCorrection, deltaTime * _scaleLerpSpeed);
 
             //KS.Logger.LogDebug($"stretch({stretch.x:F3},{stretch.y:F3},{stretch.z:F3}) volumeCorrection[{volumeCorrection}] " +
             //    $"stretchVolume[{stretch.x + stretch.y + stretch.z}] " +
@@ -652,147 +432,67 @@ namespace KineticShift
             return finalScale;
         }
 
-        //protected Vector3 ApplyScaleModification(Vector3 velocity, float deltaTime, float unscaledDeltaTime)
-        //{
-        //    // Avoid zero vector normalization
-        //    if (velocity == Vector3.zero)
-        //    {
-        //        return Vector3.one;
-        //    }
-
-            //    // Apply Deceleration aka MomentumReversal squash
-            //    var scaleDeltaTime = _scaleScalar * unscaledDeltaTime;
-
-            //    var acceleration = (velocity - _prevVelocity);
-            //    var velocityNormalized = velocity.normalized;
-            //    var squashOffset = _squashOffset;
-
-            //    //Reverse projected acceleration
-            //    var deceleration = -Vector3.Project(acceleration, velocityNormalized);
-            //    // Extract scalar projection (not a cosine)
-            //    var decelMagnitude = Vector3.Dot(deceleration, velocityNormalized);
-
-            //    var localRot = Bone.localRotation;
-
-            //    var boneRight = localRot * Vector3.right;
-            //    var boneUp = localRot * Vector3.up;
-            //    var boneForward = localRot * Vector3.forward;
-            //    //If strong deceleration
-            //    if (decelMagnitude > 0f) // && velocity.magnitude < prevVelocity.magnitude)
-            //    {
-            //        var dir = _prevVelocityNormalized;
-            //        // Small magnitude influence
-            //        var magnitudeMultiplier = _squashIntensity * decelMagnitude * deltaTime; // * (1f / 10f);
-            //        // Compress along movement axes
-            //        var squash = new Vector3(
-            //            Mathf.Clamp01(1f - Mathf.Abs(Vector3.Dot(dir, boneRight)) * magnitudeMultiplier),
-            //            Mathf.Clamp01(1f - Mathf.Abs(Vector3.Dot(dir, boneUp)) * magnitudeMultiplier),
-            //            Mathf.Clamp01(1f - Mathf.Abs(Vector3.Dot(dir, boneForward)) * magnitudeMultiplier)
-            //        );
-
-            //        // Invert squash to create perpendicular expansion
-            //        var avg = (squash.x + squash.y + squash.z) * (1f / 3f);
-
-            //        var deltaX = 1f - squash.x;
-            //        var deltaY = 1f - squash.y;
-            //        var deltaZ = 1f - squash.z;
-
-            //        var inverseSquash = new Vector3(
-            //            squash.x + deltaX * 0.5f + deltaY + deltaZ,
-            //            squash.y + deltaY * 0.5f + deltaX + deltaZ,
-            //            squash.z + deltaZ * 0.5f + deltaX + deltaY
-            //        );
-            //        // The smaller the average squash, the more inverse squash
-            //        squashOffset = Vector3.Lerp(Vector3.one, inverseSquash, 1f - avg);
-
-            //        //KS.Logger.LogDebug(
-            //        //    $"Dot({Mathf.Abs(Vector3.Dot(dir, boneRight)):F2},{Mathf.Abs(Vector3.Dot(dir, boneUp)):F2},{Mathf.Abs(Vector3.Dot(dir, boneForward)):F2})" +
-            //        //    $"magnitudeMultiplier[{magnitudeMultiplier:F2}]" +
-            //        //    $"squash({squash.x:F2},{squash.y:F2},{squash.z:F2}) " +
-            //        //    $"inverseSquash({inverseSquash.x:F2},{inverseSquash.y:F2},{inverseSquash.z:F2}) " +
-            //        //    $"squashOffset({squashOffset.x:F2},{squashOffset.y:F2},{squashOffset.z:F2})"
-            //        //    );
-            //    }
-            //    else
-            //    {
-            //        // Smoothly return squash offset to neutral (1,1,1)
-            //        squashOffset = Vector3.Lerp(squashOffset, Vector3.one, unscaledDeltaTime * _squashDecaySpeed);
-            //    }
-
-            //    // Get normalized velocity direction
-            //    //var dir = velocity.normalized;
-
-            //    var speed = velocity.magnitude * scaleDeltaTime;
-
-            //    // Calculate stretch scale (bigger with speed)
-            //    var stretchAmount = Mathf.Clamp(1f + speed, 1f, _scaleMaxStretch);
-
-            //    // Perpendicular squash (inverse of stretch to preserve volume feel)
-            //    var squashAmount = Mathf.Clamp(1f - (stretchAmount - 1f) * 0.5f, _minSquashScale, 1f);
 
 
-            //    var xStretch = Mathf.Abs(Vector3.Dot(velocityNormalized, boneRight));
-            //    var yStretch = Mathf.Abs(Vector3.Dot(velocityNormalized, boneUp));
-            //    var zStretch = Mathf.Abs(Vector3.Dot(velocityNormalized, boneForward));
+        protected Vector3 GetGravityPositionOffset(out float dotUp, out float dotR)
+        {
+            dotUp = Vector3.Dot(Bone.up, Vector3.up);
+            dotR = Vector3.Dot(Bone.right, Vector3.up);
 
-            //    var baseScale = _originalVolume;
+            //var smoothDotUp = NeatStep(Mathf.Abs(dotUp));
 
-            //    // Compute new scale along local axes
-            //    var newScale = new Vector3(
-            //        baseScale.x * (1f + (stretchAmount - 1f) * xStretch),
-            //        baseScale.y * (1f + (stretchAmount - 1f) * yStretch),
-            //        baseScale.z * (1f + (stretchAmount - 1f) * zStretch)
-            //        );
+            var result = Vector3.Lerp(_dotUpMiddle, dotUp > 0f ? _dotUpUp : _dotUpDown, Mathf.Abs(dotUp));
 
+            result += Vector3.Lerp(_dotRMiddle, dotR > 0f ? _dotRUp : _dotRDown, Mathf.Abs(dotR));
 
+            return result;
+        }
 
-            //    //KS.Logger.LogDebug($"stretchAmount[{stretchAmount:F2}] squashAmount[{squashAmount:F2}] " +
-            //    //    $"xStretch({xStretch:F2},{yStretch:F2},{zStretch:F2}) " +
-            //    //    $"newScale({newScale.x:F2},{newScale.y:F2},{newScale.z:F2}) "
-            //    //    );
-            //    // Normalize to squash perpendicular axes
-            //    //var stretchRatio = newScale.magnitude / _baseScaleMagnitude;
-            //    newScale = new Vector3(
-            //        Mathf.Lerp(newScale.x, baseScale.x * squashAmount, 1f - xStretch),
-            //        Mathf.Lerp(newScale.y, baseScale.y * squashAmount, 1f - yStretch),
-            //        Mathf.Lerp(newScale.z, baseScale.z * squashAmount, 1f - zStretch)
-            //    );
+        protected Vector3 GetGravityScaleOffset(out float dotFwd)
+        {
+            dotFwd = Vector3.Dot(Bone.forward, Vector3.up);
 
-            //    newScale = Vector3.Scale(newScale, squashOffset);
-            //    newScale.z += _velocityDeltaZ;
-            //    // Smoothly interpolate to new scale
-            //    var scaleModifier = Vector3.Lerp(_prevScale, newScale, unscaledDeltaTime * _scaleSmoothing);
-            //    //scaleModifier.z = 1f;
+            return Vector3.Lerp(_dotFwdMiddle, dotFwd > 0f ? _dotFwdUp : _dotFwdDown, Mathf.Abs(dotFwd));
+        }
 
-            //    //KS.Logger.LogDebug(
-            //    //    $"squashOffset({squashOffset.x:F2},{squashOffset.y:F2},{squashOffset.z:F2})" +
-            //    //    $"xStretch({xStretch:F2},{yStretch:F2},{zStretch:F2}) " +
-            //    //    $"newScale({newScale.x:F2},{newScale.y:F2},{newScale.z:F2}) " +
-            //    //    $"scaleModifier({scaleModifier.x:F2},{scaleModifier.y:F2},{scaleModifier.z:F2}) " +
-            //    //    $"velocity({velocity.x:F4},{velocity.y:F4},{velocity.z:F4})");
+        protected static bool[] Effects = new bool[Enum.GetNames(typeof(Effect)).Length];  
 
-            //    // Store local variables
-            //    _prevVelocityNormalized = velocityNormalized;
-            //    _prevScale = scaleModifier;
-            //    _squashOffset = squashOffset;
-            //    return scaleModifier;
-            //}
+        internal static void UpdateSettings()
+        {
+            // Cache setting into a static array
+            Effects[GetPower((int)Effect.Linear)] = (AniMorph.Effects.Value & Effect.Linear) != 0;
+            Effects[GetPower((int)Effect.Angular)] = (AniMorph.Effects.Value & Effect.Angular) != 0;
+            Effects[GetPower((int)Effect.Tethering)] = (AniMorph.Effects.Value & Effect.Tethering) != 0;
+            Effects[GetPower((int)Effect.Acceleration)] = (AniMorph.Effects.Value & Effect.Acceleration) != 0;
+            Effects[GetPower((int)Effect.Deceleration)] = (AniMorph.Effects.Value & Effect.Deceleration) != 0;
+            Effects[GetPower((int)Effect.GravityLinear)] = (AniMorph.Effects.Value & Effect.GravityLinear) != 0;
+            Effects[GetPower((int)Effect.GravityAngular)] = (AniMorph.Effects.Value & Effect.GravityAngular) != 0;
 
-            //private void UpdateStretchScale(Vector3 velocity, Vector3 velocityNormalized, out Vector3 scaleModifier)
-            //{
-            //    // Don't stretch if not moving
-            //    //if (velocity.sqrMagnitude < 0.001f)
-            //    //{
-            //    //scaleModifier = Vector3.Lerp(transform.localScale, baseScale, Time.deltaTime * scaleSmoothing);
+            // Find what power of 2 a number is
+            static int GetPower(int number)
+            {
+                var result = 0;
 
-            //    //}
+                while (number > 1)
+                {
+                    number >>= 1;
+                    result++;
+                }
+                return result;
+            }
+        }
+        
+        internal void OnConfigUpdate()
+        {
+            _prevVelocity = Vector3.zero;
+            _prevAngularVelocity = Vector3.zero;
+            _prevScale = Vector3.one;
+            _prevRotation = Bone.rotation;
+        }
 
-
-            //}
-
-            /// <summary>
-            /// Mathf.SmoothStep but limited to 0..1f.
-            /// </summary>
+        /// <summary>
+        /// Mathf.SmoothStep but limited to 0..1f.
+        /// </summary>
         protected float CheapStep(float t) => t * t * (3f - 2f * t);
 
         /// <summary>
@@ -820,14 +520,40 @@ namespace KineticShift
             Mathf.SmoothStep(from.z, to.z, t.z)
             );
 
-        public enum Effect
+        [Flags]
+        internal enum Effect
         {
-            None = 1,
-            VelocityAxial = 2,
-            VelocityAngular = 4,
-            Tethering = 8,
-            AccelerationScale = 16,
-            DecelerationSquash = 32,
+            Linear = 1,
+            Angular = 2,
+            Tethering = 4,
+            Acceleration = 8,
+            Deceleration = 16,
+            GravityLinear = 32,
+            GravityAngular = 64,
+            GravityScale = 128,
         }
+
+        // For indexing purpose
+        protected enum RefEffect
+        {
+            // Follow the position as if attached by a rubber spring.
+            Linear,
+            // Follow the rotation as if attached by a rubber spring.
+            Angular,
+            // Adjust the rotation based on the linear offset as if connected by tether.
+            Tethering,
+            // Increase the scale along the axis of acceleration, while decreasing perpendicular ones.
+            Acceleration,
+            // Decrease the scale along the axis of deceleration, while increasing perpendicular ones,
+            // when the momentum reversal is in critical state.
+            Deceleration,
+            // Apply a position offset based on the rotation of the bone and the correlating gravity force.
+            GravityLinear,
+            // Apply a rotation offset based on the rotation of the bone and the correlating gravity force.
+            GravityAngular,
+            // Apply a scale offset based on the rotation of the bone and the correlating gravity force.
+            GravityScale
+        }
+
     }
 }
