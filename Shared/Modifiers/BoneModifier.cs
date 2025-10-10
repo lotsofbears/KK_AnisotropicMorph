@@ -29,7 +29,7 @@ namespace AniMorph
         private float _maxRotationAngle = 45f;
 
         // Max scale along velocity axis
-        private float _scaleMaxStretch = 0.4f;
+        //private float _scaleMaxStretch = 0.4f;
         //// Min scale on perpendicular axes
         //private float _minSquashScale = 0.67f;
 
@@ -371,6 +371,7 @@ namespace AniMorph
             _prevVelocity = Vector3.zero;
             _prevAngularVelocity = Vector3.zero;
             _prevScale = Vector3.one;
+            _scaleAccumulatedDeceleration = 0f;
             //_prevAccelerationScale = Vector3.one;
             //_prevDecelerationScale = Vector3.one;
         }
@@ -380,91 +381,92 @@ namespace AniMorph
             _prevVelocity = velocity;
         }
 
-        private float _totalDeceleration;
+        private float _scaleAccumulatedDeceleration;
         //private Vector3 _prevDecelerationScale;
         //private Vector3 _prevAccelerationScale;
 
-        /// <param name="deltaTime">Requires scaled time to work properly on abnormal speed.</param>
         protected Vector3 GetScaleOffset(Vector3 velocity, float velocityMagnitude, float deltaTime, bool acceleration,  bool deceleration)
         {
             // Avoid division by zero
             if (velocityMagnitude == 0f) return Vector3.one;
 
-            var prevLocalVelocity = _prevVelocity;
+            // Normalize velocity
+            var velocityNormalized = velocity * (1f / velocityMagnitude);
 
-            var velocityDir = velocity * (1f / velocityMagnitude);
-
-            var absVelocityDir = new Vector3(Mathf.Abs(velocityDir.x), Mathf.Abs(velocityDir.y), Mathf.Abs(velocityDir.z));
+            var absVelocityNormalized = new Vector3(Mathf.Abs(velocityNormalized.x), Mathf.Abs(velocityNormalized.y), Mathf.Abs(velocityNormalized.z));
 
             // Initialize distortion as neutral
             var distortion = Vector3.one;
 
+            // Using proper acceleration with accumulation or without
+            // looks worse then a dumb magnitude based implementation.
             if (acceleration)
             {
-                distortion += absVelocityDir * (_scaleAccelerationFactor * velocityMagnitude);
-                // Clamp directional stretch
-                var floor = 1f - _scaleMaxStretch;
-                var ceiling = 1f + _scaleMaxStretch;
-                distortion = new Vector3(
-                    Mathf.Clamp(distortion.x, floor, ceiling),
-                    Mathf.Clamp(distortion.y, floor, ceiling),
-                    Mathf.Clamp(distortion.z, floor, ceiling)
-                    );
-//#if DEBUG
-//                AniMorph.Logger.LogDebug($"Acceleration:distortion{distortion}");
-//#endif
+                // How much scale can deviate
+                var distortionAmount = velocityMagnitude * _scaleAccelerationFactor;
+                distortionAmount = Mathf.Clamp(distortionAmount, 0f, _scaleMaxDistortion);
+                // Apply distortion amount to velocity axes
+                distortion += absVelocityNormalized * distortionAmount;
+                // Shrink axes perpendicular to the velocity 
+                var perpendicularScale = Vector3.one + Vector3.Scale(absVelocityNormalized - Vector3.one, distortionAmount * _scaleUnevenDistribution);
+                // Combine vectors
+                distortion = Vector3.Scale(distortion, perpendicularScale);
+#if DEBUG
+                AniMorph.Logger.LogDebug($"Acceleration:distortion({distortion.x:F3},{distortion.y:F3},{distortion.z:F3})" +
+                    $"scale({perpendicularScale.x:F3},{perpendicularScale.y:F3},{perpendicularScale.z:F3})" +
+                    $"absVelocityNorm({absVelocityNormalized.x:F3},{absVelocityNormalized.y:F3},{absVelocityNormalized.z:F3})");
+#endif
             }
+
             if (deceleration)
             {
                 // TODO centralize FPS calculation.
-                var accelerationVec = (velocity - prevLocalVelocity) * (1f / deltaTime);
+                var accelerationVec = (velocity - _prevVelocity) * (1f / deltaTime);
 
                 // Project acceleration onto direction to get deceleration if negative
-                var decelerationDot = Vector3.Dot(accelerationVec, velocityDir);
+                var decelerationDot = Vector3.Dot(accelerationVec, velocityNormalized);
 
-                AniMorph.Logger.LogDebug($"Deceleration:dot[{decelerationDot:F3}] " +
-                    $"totalDeceleration[{_totalDeceleration:F3}]" +
-                    //$"velocityDir({velocityDir.x:F3},{velocityDir.y:F3},{velocityDir.z:F3})" +
-                    $"accelerationVec{accelerationVec} accelerationVecMag{accelerationVec.magnitude:F3}"
+                //AniMorph.Logger.LogDebug($"Deceleration:dot[{decelerationDot:F3}] " +
+                //    $"totalDeceleration[{_totalDeceleration:F3}" 
+                //    //$"velocityDir({velocityDir.x:F3},{velocityDir.y:F3},{velocityDir.z:F3})" +
+                //    //$"accelerationVec{accelerationVec} accelerationVecMag{accelerationVec.magnitude:F3}"
                     
-                    );
-                // Amplify acceleration as it tends to be smaller on the average.
+                //    );
+                // Amplify deceleration as it tends to be too small.
                 if (decelerationDot < 0f) decelerationDot *= 2f;
 
-                // Add accumulated deceleration
-                var totalDeceleration = Mathf.Clamp01(_totalDeceleration + decelerationDot);
-                // Store for next frame
-                _totalDeceleration = totalDeceleration;
+                // Accumulate deceleration, deltaTime is a passive drain to avoid awkward accumulations in some idle animations.
+                var totalDeceleration = Mathf.Clamp01(_scaleAccumulatedDeceleration + decelerationDot - (deltaTime * 0.01f));
+                // Store for the next frame
+                _scaleAccumulatedDeceleration = totalDeceleration;
 
                 if (totalDeceleration > 0f)
                 {
-                    // Get squash amount
-                    var squashAmount = totalDeceleration  * _scaleDecelerationFactor;
-                    // Clamp squash amount
-                    squashAmount = Mathf.Clamp(squashAmount, 0f, _scaleMaxDistortion);
-                    // Apply squash amount to velocity axes
-                    var decelerationScale = Vector3.one + (-absVelocityDir * squashAmount);
-                    // Set unequal distribution of perpendicular distortion
-                    // Expand perpendicular axes
-                    var perpendicularScale = Vector3.one + Vector3.Scale((Vector3.one - absVelocityDir), squashAmount * _scaleUnevenDistribution); // * (squashAmount * 0.5f);
+                    // How much scale can deviate
+                    var distortionAmount = totalDeceleration  * _scaleDecelerationFactor;
+                    distortionAmount = Mathf.Clamp(distortionAmount, 0f, _scaleMaxDistortion);
+                    // Apply distortion amount to velocity axes
+                    var decelerationScale = Vector3.one - (absVelocityNormalized * distortionAmount);
+                    // Expand axes perpendicular to the velocity
+                    var perpendicularScale = Vector3.one + Vector3.Scale((Vector3.one - absVelocityNormalized), distortionAmount * _scaleUnevenDistribution); // * (squashAmount * 0.5f);
                     // Combine vectors
                     decelerationScale = Vector3.Scale(decelerationScale, perpendicularScale);
 
                     distortion = Vector3.Scale(distortion, decelerationScale);
 
 //#if DEBUG
-//                    AniMorph.Logger.LogDebug($"Deceleration:reverseMoment:dot[{decelerationDot:F3}] squashAmount[{squashAmount:F3}] totalDeceleration[{totalDeceleration}]" +
+//                    AniMorph.Logger.LogDebug($"Deceleration:reverseMoment:dot[{decelerationDot:F3}] squashAmount[{distortionAmount:F3}] totalDeceleration[{totalDeceleration}]" +
 //                        $"perpendicularScale({perpendicularScale.x:F3},{perpendicularScale.y:F3},{perpendicularScale.z:F3}) " +
-//                        $"squashScale({decelerationScale.x:F3},{decelerationScale.y:F3},{decelerationScale.z:F3})" +
+//                        $"decelerationScale({decelerationScale.x:F3},{decelerationScale.y:F3},{decelerationScale.z:F3})" +
 //                        $"");
 //#endif
                 }
-//#if DEBUG
-//                else
-//                {
-//                    AniMorph.Logger.LogDebug($"Deceleration:dot[{decelerationDot}]");
-//                }
-//#endif
+                //#if DEBUG
+                //                else
+                //                {
+                //                    AniMorph.Logger.LogDebug($"Deceleration:dot[{decelerationDot}]");
+                //                }
+                //#endif
             }
             if (_scalePreserveVolume)
             {
