@@ -51,6 +51,8 @@ namespace AniMorph
 
         //public float restLength = 0f;
         private Vector3 _linearGravityForce = new(0f, 0f, 0f);
+        private Vector3 _linearLimitPositive;
+        private Vector3 _linearLimitNegative;
         private float _linearSpringStrength = 25f;
         private float _linearDamping = 10f;
         private float _linearMassMultiplier = 1f;
@@ -60,14 +62,13 @@ namespace AniMorph
         private bool _linearGravity;
 
 
-        private float GetMassMultiplier
+        private float SetLinearMassMultiplier
         {
-            get
-            {
-                return _linearMass;
-            }
             set
             {
+                if (value <= 0f) value = 0.01f;
+
+                _linearMass = value;
                 _linearMassMultiplier = 1f / value;
             }
         }
@@ -100,21 +101,25 @@ namespace AniMorph
         private bool _scalePreserveVolume;
 
 
-        // Gravity variables and properties
+        #region Gravity variables and properties
 
-
+        // When Dot(Bone.up, Vector3.up) points in up/middle/down direction.
         private Vector3 _dotUpUp = Vector3.zero;
-        private Vector3 _dotUpMiddle = new Vector3(0f, 0.03f, 0f);
+        private Vector3 _dotUpMiddle = new Vector3(0f, 0.02f, 0f);
         private Vector3 _dotUpDown = new Vector3(0f, 0.05f, 0f);
 
-        private Vector3 _dotFwdUp;
+        // When Dot(Bone.forward, Vector3.up) points in up/middle/down direction.
+        private Vector3 _dotFwdUp = new Vector3(0.075f, 0.075f, -0.15f);
         private Vector3 _dotFwdMiddle;
-        private Vector3 _dotFwdDown;
+        // Half of Z volume are perpendicular axes, half is subcutaneous fat from all around.
+        private Vector3 _dotFwdDown = new Vector3(-0.05f, -0.05f, 0.2f);
 
+        // When Dot(Bone.right, Vector3.up) points in up/middle/down direction.
         private Vector3 _dotRUp = new Vector3(-0.025f, -0.02f, 0f);
         private Vector3 _dotRMiddle;
         private Vector3 _dotRDown = new Vector3(0.025f, -0.02f, 0f);
 
+        #endregion
 
         // Pseudo previous as we use dead reckoning and have no way to know,
         // Synchronized periodically when animator changes states.
@@ -244,7 +249,6 @@ namespace AniMorph
 
             boneModifierData.RotationModifier = rotMod + Tethering.GetTetheringOffset(velocity, deltaTime);
 
-            //boneModifierData.ScaleModifier = GetScaleDistortion(velocity, velocityMagnitude, deltaTime);
             StoreVariables(velocity);
         }
 
@@ -262,7 +266,7 @@ namespace AniMorph
             var localDeltaMagnitude = localDelta.magnitude;
 
             // Normalized displacement, avoid division by zero
-            var direction = (localDeltaMagnitude == 0f) ? Vector3.zero : (localDelta * (1f / localDeltaMagnitude)); //  displacement.normalized;
+            var direction = (localDeltaMagnitude == 0f) ? Vector3.zero : (localDelta * (1f / localDeltaMagnitude));
 
             //var stretch = currentLength - restLength;
             // F_spring = -k * x
@@ -277,10 +281,24 @@ namespace AniMorph
                 totalForce += _linearMass * Bone.InverseTransformDirection(_linearGravityForce);
             }
             // a = F / m
-            var acceleration = totalForce * _linearMassMultiplier;
+            var acceleration = totalForce * (_linearMassMultiplier * deltaTime);
 
-            velocity += acceleration * deltaTime;
+            
+            // Limit axes
 
+            for (var i = 0; i < 3; i++)
+            {
+                if (acceleration[i] > 0f)
+                {
+                    acceleration[i] *= _linearLimitPositive[i];
+                }
+                else
+                {
+                    acceleration[i] *= _linearLimitNegative[i];
+                }
+            }
+
+            velocity += acceleration;
 
             // Check if clamp is necessary
             velocityMagnitude = velocity.magnitude;
@@ -369,6 +387,7 @@ namespace AniMorph
         /// <param name="deltaTime">Requires scaled time to work properly on abnormal speed.</param>
         protected Vector3 GetScaleOffset(Vector3 velocity, float velocityMagnitude, float deltaTime, bool acceleration,  bool deceleration)
         {
+            // Avoid division by zero
             if (velocityMagnitude == 0f) return Vector3.one;
 
             var prevLocalVelocity = _prevVelocity;
@@ -391,9 +410,9 @@ namespace AniMorph
                     Mathf.Clamp(distortion.y, floor, ceiling),
                     Mathf.Clamp(distortion.z, floor, ceiling)
                     );
-#if DEBUG
-                AniMorph.Logger.LogDebug($"Acceleration:distortion{distortion}");
-#endif
+//#if DEBUG
+//                AniMorph.Logger.LogDebug($"Acceleration:distortion{distortion}");
+//#endif
             }
             if (deceleration)
             {
@@ -403,6 +422,12 @@ namespace AniMorph
                 // Project acceleration onto direction to get deceleration if negative
                 var decelerationDot = Vector3.Dot(accelerationVec, velocityDir);
 
+                AniMorph.Logger.LogDebug($"Deceleration:dot[{decelerationDot:F3}] " +
+                    $"totalDeceleration[{_totalDeceleration:F3}]" +
+                    //$"velocityDir({velocityDir.x:F3},{velocityDir.y:F3},{velocityDir.z:F3})" +
+                    $"accelerationVec{accelerationVec} accelerationVecMag{accelerationVec.magnitude:F3}"
+                    
+                    );
                 // Amplify acceleration as it tends to be smaller on the average.
                 if (decelerationDot < 0f) decelerationDot *= 2f;
 
@@ -427,19 +452,19 @@ namespace AniMorph
 
                     distortion = Vector3.Scale(distortion, decelerationScale);
 
-#if DEBUG
-                    AniMorph.Logger.LogDebug($"Deceleration:reverseMoment:dot[{decelerationDot:F3}] squashAmount[{squashAmount:F3}] totalDeceleration[{totalDeceleration}]" +
-                        $"perpendicularScale({perpendicularScale.x:F3},{perpendicularScale.y:F3},{perpendicularScale.z:F3}) " +
-                        $"squashScale({decelerationScale.x:F3},{decelerationScale.y:F3},{decelerationScale.z:F3})" +
-                        $"");
-#endif
+//#if DEBUG
+//                    AniMorph.Logger.LogDebug($"Deceleration:reverseMoment:dot[{decelerationDot:F3}] squashAmount[{squashAmount:F3}] totalDeceleration[{totalDeceleration}]" +
+//                        $"perpendicularScale({perpendicularScale.x:F3},{perpendicularScale.y:F3},{perpendicularScale.z:F3}) " +
+//                        $"squashScale({decelerationScale.x:F3},{decelerationScale.y:F3},{decelerationScale.z:F3})" +
+//                        $"");
+//#endif
                 }
-#if DEBUG
-                else
-                {
-                    AniMorph.Logger.LogDebug($"Deceleration:dot[{decelerationDot}]");
-                }
-#endif
+//#if DEBUG
+//                else
+//                {
+//                    AniMorph.Logger.LogDebug($"Deceleration:dot[{decelerationDot}]");
+//                }
+//#endif
             }
             if (_scalePreserveVolume)
             {
@@ -450,16 +475,16 @@ namespace AniMorph
             }
 
             var finalScale = Vector3.Lerp(_prevScale, distortion, deltaTime * _scaleLerpSpeed);
-#if DEBUG
-            if (!acceleration && !deceleration)
-            {
-                AniMorph.Logger.LogDebug($"stretch({finalScale.x:F3},{finalScale.y:F3},{finalScale.z:F3})" +
-                //    $"stretchVolume[{stretch.x + stretch.y + stretch.z}] " +
-                //    $"finalScale({finalScale.x:F3},{finalScale.y:F3},{finalScale.z:F3}) " +
-                //    $"finalVolume[{finalScale.x + finalScale.y + finalScale.z}]");
-                "");
-            }
-#endif
+//#if DEBUG
+//            if (!acceleration && !deceleration)
+//            {
+//                AniMorph.Logger.LogDebug($"stretch({finalScale.x:F3},{finalScale.y:F3},{finalScale.z:F3})" +
+//                //    $"stretchVolume[{stretch.x + stretch.y + stretch.z}] " +
+//                //    $"finalScale({finalScale.x:F3},{finalScale.y:F3},{finalScale.z:F3}) " +
+//                //    $"finalVolume[{finalScale.x + finalScale.y + finalScale.z}]");
+//                "");
+//            }
+//#endif
             _prevScale = finalScale;
             //_prevAccelerationScale = distortion;
             //_prevDecelerationScale = decelerationScale;
@@ -469,10 +494,8 @@ namespace AniMorph
 
 
 
-        protected Vector3 GetGravityPositionOffset(out float dotUp, out float dotR)
+        protected Vector3 GetGravityPositionOffset(float dotUp, float dotR)
         {
-            dotUp = Vector3.Dot(Bone.up, Vector3.up);
-            dotR = Vector3.Dot(Bone.right, Vector3.up);
 
             //var smoothDotUp = NeatStep(Mathf.Abs(dotUp));
 
@@ -480,14 +503,18 @@ namespace AniMorph
 
             result += Vector3.Lerp(_dotRMiddle, dotR > 0f ? _dotRUp : _dotRDown, Mathf.Abs(dotR));
 
+            //AniMorph.Logger.LogDebug($"GravityPosOffset:dotUp[{dotUp:F3}] dotR[{dotR:F3}] result({result.x:F3},{result.y:F3},{result.z:F3})");
+
             return result;
         }
 
-        protected Vector3 GetGravityScaleOffset(out float dotFwd)
+        protected Vector3 GetGravityScaleOffset(float dotFwd)
         {
-            dotFwd = Vector3.Dot(Bone.forward, Vector3.up);
+            var result = Vector3.Lerp(_dotFwdMiddle, dotFwd > 0f ? _dotFwdUp : _dotFwdDown, Mathf.Abs(dotFwd));
 
-            return Vector3.Lerp(_dotFwdMiddle, dotFwd > 0f ? _dotFwdUp : _dotFwdDown, Mathf.Abs(dotFwd));
+            //AniMorph.Logger.LogDebug($"GravityScaleOffset:dotFwd[{dotFwd:F3}] result({result.x:F3},{result.y:F3},{result.z:F3})");
+
+            return result;
         }
 
         protected readonly bool[] Effects = new bool[Enum.GetNames(typeof(Effect)).Length];  
@@ -503,6 +530,9 @@ namespace AniMorph
                 _linearDamping = AniMorph.BreastLinearDamping.Value;
                 _linearGravityForce = new Vector3(0f, AniMorph.BreastLinearGravity.Value, 0f);
                 _linearGravity = AniMorph.BreastLinearGravity.Value != 0f;
+                _linearLimitPositive = AniMorph.BreastLinearLimitPositive.Value;
+                _linearLimitNegative = AniMorph.BreastLinearLimitNegative.Value;
+                SetLinearMassMultiplier = AniMorph.BreastLinearMass.Value;
 
                 _angularSpringStrength = AniMorph.BreastAngularSpringStrength.Value;
                 _angularDamping = AniMorph.BreastAngularDamping.Value;
@@ -529,6 +559,9 @@ namespace AniMorph
                 _linearDamping = AniMorph.ButtLinearDamping.Value;
                 _linearGravityForce = new Vector3(0f, AniMorph.ButtLinearGravity.Value, 0f);
                 _linearGravity = AniMorph.ButtLinearGravity.Value != 0f;
+                _linearLimitPositive = AniMorph.ButtLinearLimitPositive.Value;
+                _linearLimitNegative = AniMorph.ButtLinearLimitNegative.Value;
+                SetLinearMassMultiplier = AniMorph.ButtLinearMass.Value;
 
                 _angularSpringStrength = AniMorph.ButtAngularSpringStrength.Value;
                 _angularDamping = AniMorph.ButtAngularDamping.Value;
@@ -552,13 +585,19 @@ namespace AniMorph
 
             void UpdateEffects(Effect enumValue)
             {
-                Effects[GetPower((int)Effect.Linear)] = (enumValue & Effect.Linear) != 0;
-                Effects[GetPower((int)Effect.Angular)] = (enumValue & Effect.Angular) != 0;
-                Effects[GetPower((int)Effect.Tethering)] = (enumValue & Effect.Tethering) != 0;
-                Effects[GetPower((int)Effect.Acceleration)] = (enumValue & Effect.Acceleration) != 0;
-                Effects[GetPower((int)Effect.Deceleration)] = (enumValue & Effect.Deceleration) != 0;
-                Effects[GetPower((int)Effect.GravityLinear)] = (enumValue & Effect.GravityLinear) != 0;
-                Effects[GetPower((int)Effect.GravityAngular)] = (enumValue & Effect.GravityAngular) != 0;
+                foreach (Effect value in Enum.GetValues(typeof(Effect)))
+                {
+                    Effects[GetPower((int)value)] = (enumValue & value) != 0;
+                }
+
+                //Effects[GetPower((int)Effect.Linear)] = (enumValue & Effect.Linear) != 0;
+                //Effects[GetPower((int)Effect.Angular)] = (enumValue & Effect.Angular) != 0;
+                //Effects[GetPower((int)Effect.Tethering)] = (enumValue & Effect.Tethering) != 0;
+                //Effects[GetPower((int)Effect.Acceleration)] = (enumValue & Effect.Acceleration) != 0;
+                //Effects[GetPower((int)Effect.Deceleration)] = (enumValue & Effect.Deceleration) != 0;
+                //Effects[GetPower((int)Effect.GravityLinear)] = (enumValue & Effect.GravityLinear) != 0;
+                //Effects[GetPower((int)Effect.GravityAngular)] = (enumValue & Effect.GravityAngular) != 0;
+                //Effects[GetPower((int)Effect.GravityScale)] = (enumValue & Effect.GravityScale) != 0;
 
                 // Find what power of 2 the number is.
                 static int GetPower(int number)

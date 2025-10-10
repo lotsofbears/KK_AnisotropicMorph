@@ -17,7 +17,6 @@
     <Compile Include="$(MSBuildThisFileDirectory)AniMorph.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Modifiers\BoneModifierSlave.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Modifiers\BoneModifierMaster.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Modifiers\BoneModifierMasterButt.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Modifiers\Effects\Tethering.cs" />
   </ItemGroup>
   <ItemGroup>

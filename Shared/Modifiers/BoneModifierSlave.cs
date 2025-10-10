@@ -61,14 +61,18 @@ namespace AniMorph
             var dotFwd = masterDotFwd; // Vector3.Dot(Bone.forward, Vector3.up);
             var dotRight = masterDotRight; // Vector3.Dot(Bone.right, Vector3.up);
 
-            var absDotFwd = Math.Abs(dotFwd);
-            var absDotRight = Math.Abs(dotRight);
-
+            //var absDotFwd = Math.Abs(dotFwd);
+            //var absDotRight = Math.Abs(dotRight);
             var angleLimit = _sidewaysAngleLimit;
+
+            // A way to reduce angle spread when lying face up.
+            if (dotFwd > 0f) dotFwd *= 0.5f;
+            
+            var dotSum = dotFwd + dotRight;
 
             if (_isLeftPosition) angleLimit = -angleLimit;
 
-            var result = new Vector3(0f, (angleLimit * dotFwd) + (angleLimit * dotRight), 0f);
+            var result = new Vector3(0f, (angleLimit * dotSum), 0f);
 
             //var boneUp = Bone.up;
 
@@ -84,7 +88,7 @@ namespace AniMorph
 
             //var lookRot = Quaternion.LookRotation(-Vector3.up, boneUp);
             ////var result = new Vector3(0f, deviationY * masterFwdDot, 0f);
-            AniMorph.Logger.LogDebug($"dotFwd[{dotFwd:F2}] dotRight[{dotRight:F2}] result{result}");
+            //AniMorph.Logger.LogDebug($"dotFwd[{dotFwd:F3}] dotRight[{dotRight:F3}] dotSum[{dotSum:F3}] result({result.x:F3},{result.y:F3},{result.z:F3})");
             return result;
         }
     }

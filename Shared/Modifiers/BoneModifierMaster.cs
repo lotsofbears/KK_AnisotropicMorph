@@ -1,4 +1,5 @@
-﻿using ADV.Commands.Base;
+﻿using ActionGame.Point;
+using ADV.Commands.Base;
 using KKABMX.Core;
 using System;
 using System.Collections.Generic;
@@ -18,7 +19,8 @@ namespace AniMorph
         internal BoneModifierMaster(
             Transform master,
             BoneModifierSlave[] slaves, 
-            BoneModifierData boneModifierData) : base(master, null, null, null, boneModifierData)
+            BoneModifierData boneModifierData
+            ) : base(master, null, null, null, boneModifierData)
         {
             _slaves = slaves;
         }
@@ -43,17 +45,17 @@ namespace AniMorph
             //var scaleModifier = effects[(int)RefEffect.Acceleration] ? GetScaleDistortion(velocity, velocityMagnitude, deltaTime) : Vector3.one;
             var scaleModifier = Vector3.one;
 
-            var dotUp = 0f;
-            var dotR = 0f;
-            var dotFwd = 0f;
+            var dotUp = Vector3.Dot(Bone.up, Vector3.up);
+            var dotR = Vector3.Dot(Bone.right, Vector3.up);
+            var dotFwd = Vector3.Dot(Bone.forward, Vector3.up);
 
             // Apply gravity linear offset if setting
             if (effects[(int)RefEffect.GravityLinear])
-                positionModifier += GetGravityPositionOffset(out dotUp, out dotR);
+                positionModifier += GetGravityPositionOffset(dotUp, dotR);
 
             // Apply deceleration scale distortion if setting
             if (effects[(int)RefEffect.GravityScale])
-                scaleModifier += GetGravityScaleOffset(out dotFwd);
+                scaleModifier += GetGravityScaleOffset(dotFwd);
 
 
             

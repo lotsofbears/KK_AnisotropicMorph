@@ -38,6 +38,9 @@ namespace AniMorph
         public static ConfigEntry<float> BreastLinearGravity;
         public static ConfigEntry<float> BreastLinearSpringStrength;
         public static ConfigEntry<float> BreastLinearDamping;
+        public static ConfigEntry<float> BreastLinearMass;
+        public static ConfigEntry<Vector3> BreastLinearLimitPositive;
+        public static ConfigEntry<Vector3> BreastLinearLimitNegative;
 
         public static ConfigEntry<float> BreastAngularSpringStrength;
         public static ConfigEntry<float> BreastAngularDamping;
@@ -66,6 +69,9 @@ namespace AniMorph
         public static ConfigEntry<float> ButtLinearGravity;
         public static ConfigEntry<float> ButtLinearSpringStrength;
         public static ConfigEntry<float> ButtLinearDamping;
+        public static ConfigEntry<float> ButtLinearMass;
+        public static ConfigEntry<Vector3> ButtLinearLimitPositive;
+        public static ConfigEntry<Vector3> ButtLinearLimitNegative;
 
         public static ConfigEntry<float> ButtAngularSpringStrength;
         public static ConfigEntry<float> ButtAngularDamping;
@@ -120,9 +126,12 @@ namespace AniMorph
 
                 BreastEffects = Config.Bind("Breast", "Effects", Effect.Linear | Effect.Angular | Effect.Tethering | Effect.Acceleration | Effect.Deceleration, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 110 }));
 
-                BreastLinearSpringStrength = Config.Bind("Breast", "LinearStrength", 15f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 100 }));
-                BreastLinearDamping = Config.Bind("Breast", "LinearDamping", 7f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 90 }));
-                BreastLinearGravity = Config.Bind("Breast", "LinearGravity", 0.075f, new ConfigDescription("", new AcceptableValueRange<float>(-1f, 1f), new ConfigurationManagerAttributes { Order = 80 }));
+                BreastLinearSpringStrength = Config.Bind("Breast", "Linear Strength", 15f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 100 }));
+                BreastLinearDamping = Config.Bind("Breast", "Linear Damping", 7f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 90 }));
+                BreastLinearGravity = Config.Bind("Breast", "Linear Gravity", 0.075f, new ConfigDescription("", new AcceptableValueRange<float>(-1f, 1f), new ConfigurationManagerAttributes { Order = 80 }));
+                BreastLinearMass = Config.Bind("Breast", "Linear Mass", 1f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 79 }));
+                BreastLinearLimitPositive = Config.Bind("Breast", "Linear LimitPlus", Vector3.one, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 78 }));
+                BreastLinearLimitNegative = Config.Bind("Breast", "Linear LimitMinus", Vector3.one, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 77 }));
 
                 BreastAngularSpringStrength = Config.Bind("Breast", "AngularStrength", 30f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 70 }));
                 BreastAngularDamping = Config.Bind("Breast", "AngularDamping", 5f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 60 }));
@@ -143,9 +152,12 @@ namespace AniMorph
             {
                 ButtEffects = Config.Bind("Butt", "Effects", Effect.Linear | Effect.Acceleration | Effect.Deceleration, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 110 }));
 
-                ButtLinearSpringStrength = Config.Bind("Butt", "LinearStrength", 25f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 100 }));
-                ButtLinearDamping = Config.Bind("Butt", "LinearDamping", 10f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 90 }));
-                ButtLinearGravity = Config.Bind("Butt", "LinearGravity", 0f, new ConfigDescription("", new AcceptableValueRange<float>(-1f, 1f), new ConfigurationManagerAttributes { Order = 80 }));
+                ButtLinearSpringStrength = Config.Bind("Butt", "LinearStrength", 30f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 100 }));
+                ButtLinearDamping = Config.Bind("Butt", "LinearDamping", 20f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 90 }));
+                ButtLinearGravity = Config.Bind("Butt", "LinearGravity", 0.1f, new ConfigDescription("", new AcceptableValueRange<float>(-1f, 1f), new ConfigurationManagerAttributes { Order = 80 }));
+                ButtLinearMass = Config.Bind("Butt", "LinearMass", 1f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 79 }));
+                ButtLinearLimitPositive = Config.Bind("Butt", "LinearLimitPositive", Vector3.one, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 78 }));
+                ButtLinearLimitNegative = Config.Bind("Butt", "LinearLimitNegative", Vector3.one, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 77 }));
 
                 ButtAngularSpringStrength = Config.Bind("Butt", "AngularStrength", 30f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 70 }));
                 ButtAngularDamping = Config.Bind("Butt", "AngularDamping", 5f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 60 }));
@@ -173,6 +185,7 @@ namespace AniMorph
             var configTypeVector = typeof(ConfigEntry<Vector3>);
             var configTypeFloat = typeof(ConfigEntry<float>);
             var configTypeEffect = typeof(ConfigEntry<Effect>);
+            var configTypeBool = typeof(ConfigEntry<bool>);
 
             foreach (var f in fields)
             {
@@ -189,6 +202,11 @@ namespace AniMorph
                 else if (f.FieldType == configTypeEffect)
                 {
                     var configEntry = (ConfigEntry<Effect>)f.GetValue(null);
+                    configEntry.SettingChanged += (_, _) => UpdateConfig();
+                }
+                else if (f.FieldType == configTypeBool)
+                {
+                    var configEntry = (ConfigEntry<bool>)f.GetValue(null);
                     configEntry.SettingChanged += (_, _) => UpdateConfig();
                 }
             }
