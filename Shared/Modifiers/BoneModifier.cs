@@ -5,6 +5,7 @@ using KKABMX.Core;
 using MessagePack.Decoders;
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using System.Text;
 using UnityEngine;
 using UnityEngine.UI.CoroutineTween;
@@ -24,12 +25,13 @@ namespace AniMorph
         private readonly float _height;
         // Width / Height ratio
         private readonly float _width;
-                
 
-        private float _maxRotationAngle = 45f;
+
+        // Array with effects to apply, default enum order
+        protected readonly bool[] Effects = new bool[Enum.GetNames(typeof(Effect)).Length];
 
         // Max scale along velocity axis
-        private float _scaleMaxStretch = 0.4f;
+        //private float _scaleMaxStretch = 0.4f;
         //// Min scale on perpendicular axes
         //private float _minSquashScale = 0.67f;
 
@@ -46,10 +48,8 @@ namespace AniMorph
         protected Vector3 _prevScale;
 
 
-        // Linear variables and properties
+        #region Linear variables and properties
 
-
-        //public float restLength = 0f;
         private Vector3 _linearGravityForce = new(0f, 0f, 0f);
         private Vector3 _linearLimitPositive;
         private Vector3 _linearLimitNegative;
@@ -61,7 +61,6 @@ namespace AniMorph
         private float _linearMaxSqrVelocity = 1f;
         private bool _linearGravity;
 
-
         private float SetLinearMassMultiplier
         {
             set
@@ -72,22 +71,29 @@ namespace AniMorph
                 _linearMassMultiplier = 1f / value;
             }
         }
+
         private void SetMaxVelocity(float value)
         {
             _linearMaxVelocity = value;
             _linearMaxSqrVelocity = value * value;
         }
 
+        #endregion
 
-        // Angular variables and properties
 
 
+        #region Angular variables and properties
+
+        protected Vector3 AngularApplication;
         private float _angularSpringStrength = 30f;
         private float _angularDamping = 5f;
+        private float _angularMaxAngle = 45f;
+
+        #endregion
 
 
-        // Scale variables and properties
 
+        #region Scale variables and properties
 
         // How much the scale stretches along velocity direction.
         private float _scaleAccelerationFactor = 40f; //0.01f;
@@ -99,6 +105,12 @@ namespace AniMorph
         // Max squash on deceleration
         private float _scaleMaxDistortion = 0.4f;
         private bool _scalePreserveVolume;
+        private bool _scaleDumbAcceleration;
+        private float _scaleAccumulatedAcceleration;
+        private float _scaleAccumulatedDeceleration;
+
+        #endregion
+
 
 
         #region Gravity variables and properties
@@ -138,7 +150,7 @@ namespace AniMorph
         {
             if (bone == null)
             {
-                AniMorph.Logger.LogError($"{this.GetType().Name} wasn't initialized due to wrong argument");
+                AniMorph.Logger.LogError($"{this.GetType().Name} wasn't initialized due to a wrong parameter.");
                 return;
             }
 
@@ -240,15 +252,55 @@ namespace AniMorph
         /// <summary>
         /// Meant for access from BoneEffector.
         /// </summary>
-        internal virtual void UpdateModifiers(float deltaTime, float unscaledDeltaTime)
+        internal virtual void UpdateModifiers(float deltaTime, float fps)
         {
+            var effects = Effects;
+
+            // Apply linear offset, its calculations are necessary to other methods even if the offset itself isn't.
+            var positionModifier = GetLinearOffset(deltaTime, out var velocity, out var velocityMagnitude);
+
+            //// Remove linear offset if setting
+            if (!effects[(int)RefEffect.Linear])
+            {
+                positionModifier = Vector3.zero;
+            }
+            // Apply angular offset
+            var rotationModifier = effects[(int)RefEffect.Angular] ? GetAngularOffset(deltaTime) : Vector3.zero;
+
+            // Not allowed axes are multiplied by zero, allowed by one.
+            rotationModifier = Vector3.Scale(rotationModifier, AngularApplication);
+
+            // Apply acceleration scale distortion
+            var scaleModifier = GetScaleOffset(
+                velocity, velocityMagnitude, deltaTime, fps,
+                effects[(int)RefEffect.Acceleration],
+                effects[(int)RefEffect.Deceleration]
+                );
+
+            if (effects[(int)RefEffect.Tethering])
+                rotationModifier += Tethering.GetTetheringOffset(velocity, deltaTime);
+
+            var dotUp = Vector3.Dot(Bone.up, Vector3.up);
+            var dotR = Vector3.Dot(Bone.right, Vector3.up);
+            var dotFwd = Vector3.Dot(Bone.forward, Vector3.up);
+
+            // Apply gravity position offset
+            if (effects[(int)RefEffect.GravityLinear])
+                positionModifier += GetGravityPositionOffset(dotUp, dotR);
+            // Apply gravity scale offset
+            if (effects[(int)RefEffect.GravityScale])
+                scaleModifier = Vector3.Scale(scaleModifier, GetGravityScaleOffset(dotFwd));
+            // Apply gravity rotation offset
+            if (effects[(int)RefEffect.GravityAngular])
+                rotationModifier += GetGravityAngularOffset(dotFwd, dotR);
+
             var boneModifierData = BoneModifierData;
-            boneModifierData.PositionModifier = GetLinearOffset(unscaledDeltaTime, out var velocity, out var velocityMagnitude);
-           
-            var rotMod = GetAngularOffset(unscaledDeltaTime);
+            // Write modifiers for ABMX consumption
+            boneModifierData.PositionModifier = positionModifier;
+            boneModifierData.RotationModifier = rotationModifier;
+            boneModifierData.ScaleModifier = scaleModifier;
 
-            boneModifierData.RotationModifier = rotMod + Tethering.GetTetheringOffset(velocity, deltaTime);
-
+            // Store current variables as "previous" for the next frame.
             StoreVariables(velocity);
         }
 
@@ -353,8 +405,8 @@ namespace AniMorph
             _prevAngularVelocity = angularVelocity;
 
             var absAngle = Mathf.Abs(angle);
-            if (absAngle > _maxRotationAngle)
-                newRotation = Quaternion.Slerp(currentRotation, newRotation, _maxRotationAngle / absAngle);
+            if (absAngle > _angularMaxAngle)
+                newRotation = Quaternion.Slerp(currentRotation, newRotation, _angularMaxAngle / absAngle);
 
             var result = (Quaternion.Inverse(currentRotation) * newRotation).eulerAngles;
            // _prevRotation = Quaternion.Euler(result) * _prevRotation;
@@ -371,6 +423,8 @@ namespace AniMorph
             _prevVelocity = Vector3.zero;
             _prevAngularVelocity = Vector3.zero;
             _prevScale = Vector3.one;
+            _scaleAccumulatedAcceleration = 0f;
+            _scaleAccumulatedDeceleration = 0f;
             //_prevAccelerationScale = Vector3.one;
             //_prevDecelerationScale = Vector3.one;
         }
@@ -380,91 +434,113 @@ namespace AniMorph
             _prevVelocity = velocity;
         }
 
-        private float _totalDeceleration;
         //private Vector3 _prevDecelerationScale;
         //private Vector3 _prevAccelerationScale;
 
-        /// <param name="deltaTime">Requires scaled time to work properly on abnormal speed.</param>
-        protected Vector3 GetScaleOffset(Vector3 velocity, float velocityMagnitude, float deltaTime, bool acceleration,  bool deceleration)
+        protected Vector3 GetScaleOffset(Vector3 velocity, float velocityMagnitude, float deltaTime, float fps, bool acceleration,  bool deceleration)
         {
+            if (!acceleration && !deceleration) return Vector3.one;
             // Avoid division by zero
-            if (velocityMagnitude == 0f) return Vector3.one;
+            if (velocityMagnitude == 0f)
+            {
+#if DEBUG
+                AniMorph.Logger.LogDebug($"{GetType().Name}.{MethodBase.GetCurrentMethod().Name}:Undesirable parameter value in 'velocityMagnitude', avoided divisions by zero.");
+#endif
+                return Vector3.one;
+            }
 
-            var prevLocalVelocity = _prevVelocity;
+            // Normalize velocity
+            var velocityNormalized = velocity * (1f / velocityMagnitude);
 
-            var velocityDir = velocity * (1f / velocityMagnitude);
+            var absVelocityNormalized = new Vector3(Mathf.Abs(velocityNormalized.x), Mathf.Abs(velocityNormalized.y), Mathf.Abs(velocityNormalized.z));
 
-            var absVelocityDir = new Vector3(Mathf.Abs(velocityDir.x), Mathf.Abs(velocityDir.y), Mathf.Abs(velocityDir.z));
-
+            var accelerationVec = (velocity - _prevVelocity) * fps;
+            // Project acceleration onto direction to get deceleration if negative
+            var accelerationDot = Vector3.Dot(accelerationVec, velocityNormalized);
             // Initialize distortion as neutral
             var distortion = Vector3.one;
 
+            // Proper acceleration with accumulation or without
+            // looks worse then a dumb magnitude based implementation.
+            // But hey it's an option.
             if (acceleration)
             {
-                distortion += absVelocityDir * (_scaleAccelerationFactor * velocityMagnitude);
-                // Clamp directional stretch
-                var floor = 1f - _scaleMaxStretch;
-                var ceiling = 1f + _scaleMaxStretch;
-                distortion = new Vector3(
-                    Mathf.Clamp(distortion.x, floor, ceiling),
-                    Mathf.Clamp(distortion.y, floor, ceiling),
-                    Mathf.Clamp(distortion.z, floor, ceiling)
-                    );
+                var distortionAmount = _scaleAccelerationFactor;
+
+                if (_scaleDumbAcceleration)
+                {
+                    distortionAmount *= velocityMagnitude * fps;
+                }
+                else
+                {
+                    // Accumulate acceleration, deltaTime is a passive drain to avoid awkward accumulations in some idle animations.
+                    var totalAcceleration = Mathf.Clamp01(_scaleAccumulatedAcceleration + accelerationDot - (deltaTime * 0.1f));
+
+                    distortionAmount *= totalAcceleration;
+
+                    _scaleAccumulatedAcceleration = totalAcceleration;
+                }
+
+                distortionAmount = Mathf.Clamp(distortionAmount, 0f, _scaleMaxDistortion);
+                // Apply distortion amount to velocity axes
+                distortion += absVelocityNormalized * distortionAmount;
+                // Shrink axes perpendicular to the velocity 
+                var perpendicularScale = Vector3.one + Vector3.Scale(absVelocityNormalized - Vector3.one, distortionAmount * _scaleUnevenDistribution);
+                // Combine vectors
+                distortion = Vector3.Scale(distortion, perpendicularScale);
 //#if DEBUG
-//                AniMorph.Logger.LogDebug($"Acceleration:distortion{distortion}");
+//                AniMorph.Logger.LogDebug($"Acceleration:distortion({distortion.x:F3},{distortion.y:F3},{distortion.z:F3})" +
+//                    $"distortionAmount[{distortionAmount:F3}] velocityMagnitude[{(velocityMagnitude * fps):F5}" +
+//                   // $"scale({perpendicularScale.x:F3},{perpendicularScale.y:F3},{perpendicularScale.z:F3})" +
+//                    //$"absVelocityNorm({absVelocityNormalized.x:F3},{absVelocityNormalized.y:F3},{absVelocityNormalized.z:F3})"
+//                    "");
 //#endif
             }
+
             if (deceleration)
             {
-                // TODO centralize FPS calculation.
-                var accelerationVec = (velocity - prevLocalVelocity) * (1f / deltaTime);
 
-                // Project acceleration onto direction to get deceleration if negative
-                var decelerationDot = Vector3.Dot(accelerationVec, velocityDir);
-
-                AniMorph.Logger.LogDebug($"Deceleration:dot[{decelerationDot:F3}] " +
-                    $"totalDeceleration[{_totalDeceleration:F3}]" +
-                    //$"velocityDir({velocityDir.x:F3},{velocityDir.y:F3},{velocityDir.z:F3})" +
-                    $"accelerationVec{accelerationVec} accelerationVecMag{accelerationVec.magnitude:F3}"
+                //AniMorph.Logger.LogDebug($"Deceleration:dot[{decelerationDot:F3}] " +
+                //    $"totalDeceleration[{_totalDeceleration:F3}" 
+                //    //$"velocityDir({velocityDir.x:F3},{velocityDir.y:F3},{velocityDir.z:F3})" +
+                //    //$"accelerationVec{accelerationVec} accelerationVecMag{accelerationVec.magnitude:F3}"
                     
-                    );
-                // Amplify acceleration as it tends to be smaller on the average.
-                if (decelerationDot < 0f) decelerationDot *= 2f;
+                //    );
+                // Amplify deceleration as it tends to be too small.
+                if (accelerationDot < 0f) accelerationDot *= 2f;
 
-                // Add accumulated deceleration
-                var totalDeceleration = Mathf.Clamp01(_totalDeceleration + decelerationDot);
-                // Store for next frame
-                _totalDeceleration = totalDeceleration;
+                // Accumulate deceleration, deltaTime is a passive drain to avoid awkward accumulations in some idle animations.
+                var totalDeceleration = Mathf.Clamp01(_scaleAccumulatedDeceleration + accelerationDot - (deltaTime * 0.1f));
+                // Store for the next frame
+                _scaleAccumulatedDeceleration = totalDeceleration;
 
                 if (totalDeceleration > 0f)
                 {
-                    // Get squash amount
-                    var squashAmount = totalDeceleration  * _scaleDecelerationFactor;
-                    // Clamp squash amount
-                    squashAmount = Mathf.Clamp(squashAmount, 0f, _scaleMaxDistortion);
-                    // Apply squash amount to velocity axes
-                    var decelerationScale = Vector3.one + (-absVelocityDir * squashAmount);
-                    // Set unequal distribution of perpendicular distortion
-                    // Expand perpendicular axes
-                    var perpendicularScale = Vector3.one + Vector3.Scale((Vector3.one - absVelocityDir), squashAmount * _scaleUnevenDistribution); // * (squashAmount * 0.5f);
+                    // How much scale can deviate
+                    var distortionAmount = totalDeceleration  * _scaleDecelerationFactor;
+                    distortionAmount = Mathf.Clamp(distortionAmount, 0f, _scaleMaxDistortion);
+                    // Apply distortion amount to velocity axes
+                    var decelerationScale = Vector3.one - (absVelocityNormalized * distortionAmount);
+                    // Expand axes perpendicular to the velocity
+                    var perpendicularScale = Vector3.one + Vector3.Scale((Vector3.one - absVelocityNormalized), distortionAmount * _scaleUnevenDistribution); // * (squashAmount * 0.5f);
                     // Combine vectors
                     decelerationScale = Vector3.Scale(decelerationScale, perpendicularScale);
 
                     distortion = Vector3.Scale(distortion, decelerationScale);
 
 //#if DEBUG
-//                    AniMorph.Logger.LogDebug($"Deceleration:reverseMoment:dot[{decelerationDot:F3}] squashAmount[{squashAmount:F3}] totalDeceleration[{totalDeceleration}]" +
+//                    AniMorph.Logger.LogDebug($"Deceleration:reverseMoment:dot[{decelerationDot:F3}] squashAmount[{distortionAmount:F3}] totalDeceleration[{totalDeceleration}]" +
 //                        $"perpendicularScale({perpendicularScale.x:F3},{perpendicularScale.y:F3},{perpendicularScale.z:F3}) " +
-//                        $"squashScale({decelerationScale.x:F3},{decelerationScale.y:F3},{decelerationScale.z:F3})" +
+//                        $"decelerationScale({decelerationScale.x:F3},{decelerationScale.y:F3},{decelerationScale.z:F3})" +
 //                        $"");
 //#endif
                 }
-//#if DEBUG
-//                else
-//                {
-//                    AniMorph.Logger.LogDebug($"Deceleration:dot[{decelerationDot}]");
-//                }
-//#endif
+                //#if DEBUG
+                //                else
+                //                {
+                //                    AniMorph.Logger.LogDebug($"Deceleration:dot[{decelerationDot}]");
+                //                }
+                //#endif
             }
             if (_scalePreserveVolume)
             {
@@ -508,6 +584,11 @@ namespace AniMorph
             return result;
         }
 
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="dotFwd"></param>
+        /// <returns>Offset for flat addition to the scale.</returns>
         protected Vector3 GetGravityScaleOffset(float dotFwd)
         {
             var result = Vector3.Lerp(_dotFwdMiddle, dotFwd > 0f ? _dotFwdUp : _dotFwdDown, Mathf.Abs(dotFwd));
@@ -517,11 +598,52 @@ namespace AniMorph
             return result;
         }
 
-        protected readonly bool[] Effects = new bool[Enum.GetNames(typeof(Effect)).Length];  
+
+        private float _sidewaysAngleLimit = 20f;
+        //private Quaternion _upRotation = Quaternion.Euler(90f, 0f, 0f);
+        //private Quaternion _downRotation = Quaternion.Euler(-90f, 0f, 0f);
+
+
+        protected Vector3 GetGravityAngularOffset(float masterDotFwd, float masterDotRight)
+        {
+            var dotFwd = masterDotFwd; // Vector3.Dot(Bone.forward, Vector3.up);
+            var dotRight = masterDotRight; // Vector3.Dot(Bone.right, Vector3.up);
+
+            //var absDotFwd = Math.Abs(dotFwd);
+            //var absDotRight = Math.Abs(dotRight);
+            var angleLimit = _sidewaysAngleLimit;
+
+            // A way to reduce angle spread when lying face up.
+            if (dotFwd > 0f) dotFwd *= 0.5f;
+
+            if (_isLeftPosition) angleLimit = -angleLimit;
+
+            var result = new Vector3(0f, (angleLimit * (dotFwd + dotRight)), 0f);
+
+            //var boneUp = Bone.up;
+
+            ////var boneRotation = Bone.rotation;
+
+            ////var deltaEuler = (boneRotation * Quaternion.Inverse(_upRotation)).eulerAngles;
+
+            ////var deltaAngleY = Mathf.DeltaAngle(0f, deltaEuler.y);
+
+            ////var deviationY = Mathf.Min(_angleLimitRad, Mathf.Abs(deltaAngleY));
+
+            ////if (deltaAngleY < 0f) deviationY = -deviationY;
+
+            //var lookRot = Quaternion.LookRotation(-Vector3.up, boneUp);
+            ////var result = new Vector3(0f, deviationY * masterFwdDot, 0f);
+            //AniMorph.Logger.LogDebug($"dotFwd[{dotFwd:F3}] dotRight[{dotRight:F3}] dotSum[{dotSum:F3}] result({result.x:F3},{result.y:F3},{result.z:F3})");
+            return result;
+        }
 
         
-        internal void OnConfigUpdate(AniMorph.Body part)
+        internal virtual void OnConfigUpdate(AniMorph.Body part)
         {
+#if DEBUG
+            AniMorph.Logger.LogDebug($"{GetType().Name}.{MethodBase.GetCurrentMethod().Name}:Pop");
+#endif
             OnChangeAnimator();
 
             if (part == AniMorph.Body.Breast)
@@ -536,6 +658,7 @@ namespace AniMorph
 
                 _angularSpringStrength = AniMorph.BreastAngularSpringStrength.Value;
                 _angularDamping = AniMorph.BreastAngularDamping.Value;
+                _angularMaxAngle = AniMorph.BreastAngularMaxAngle.Value;
 
                 _scaleAccelerationFactor = AniMorph.BreastScaleAccelerationFactor.Value;
                 _scaleDecelerationFactor = AniMorph.BreastScaleDecelerationFactor.Value;
@@ -543,6 +666,7 @@ namespace AniMorph
                 _scaleMaxDistortion = AniMorph.BreastScaleMaxDistortion.Value;
                 _scaleUnevenDistribution = AniMorph.BreastScaleUnevenDistribution.Value;
                 _scalePreserveVolume = AniMorph.BreastScalePreserveVolume.Value;
+                _scaleDumbAcceleration = AniMorph.BreastScaleDumbAcceleration.Value;
 
                 if (Tethering != null)
                 {
@@ -551,6 +675,17 @@ namespace AniMorph
                     Tethering.damping = AniMorph.BreastTetheringDamping.Value;
                     Tethering.maxAngle = AniMorph.BreastTetheringMaxAngle.Value;
                 }
+                _dotUpUp = AniMorph.BreastGravityUpUp.Value;
+                _dotUpMiddle = AniMorph.BreastGravityUpMid.Value;
+                _dotUpDown = AniMorph.BreastGravityUpDown.Value;
+                // Scale uses vector multiplication rather then addition.
+                _dotFwdUp = Vector3.one + AniMorph.BreastGravityFwdUp.Value;
+                _dotFwdMiddle = Vector3.one + AniMorph.BreastGravityFwdMid.Value;
+                _dotFwdDown = Vector3.one + AniMorph.BreastGravityFwdDown.Value;
+                _dotRUp = AniMorph.BreastGravityRightUp.Value;
+                _dotRMiddle = AniMorph.BreastGravityRightMid.Value;
+                _dotRDown = AniMorph.BreastGravityRightDown.Value;
+
                 UpdateEffects(AniMorph.BreastEffects.Value);
             }
             else if (part == AniMorph.Body.Butt)
@@ -565,6 +700,7 @@ namespace AniMorph
 
                 _angularSpringStrength = AniMorph.ButtAngularSpringStrength.Value;
                 _angularDamping = AniMorph.ButtAngularDamping.Value;
+                _angularMaxAngle = AniMorph.ButtAngularMaxAngle.Value;
 
                 _scaleAccelerationFactor = AniMorph.ButtScaleAccelerationFactor.Value;
                 _scaleDecelerationFactor = AniMorph.ButtScaleDecelerationFactor.Value;
@@ -572,6 +708,7 @@ namespace AniMorph
                 _scaleMaxDistortion = AniMorph.ButtScaleMaxDistortion.Value;
                 _scaleUnevenDistribution = AniMorph.ButtScaleUnevenDistribution.Value;
                 _scalePreserveVolume = AniMorph.ButtScalePreserveVolume.Value;
+                _scaleDumbAcceleration = AniMorph.ButtScaleDumbAcceleration.Value;
 
                 if (Tethering != null)
                 {
@@ -580,6 +717,16 @@ namespace AniMorph
                     Tethering.damping = AniMorph.ButtTetheringDamping.Value;
                     Tethering.maxAngle = AniMorph.ButtTetheringMaxAngle.Value;
                 }
+                _dotUpUp = AniMorph.ButtGravityUpUp.Value;
+                _dotUpMiddle = AniMorph.ButtGravityUpMid.Value;
+                _dotUpDown = AniMorph.ButtGravityUpDown.Value;
+                _dotFwdUp = Vector3.one + AniMorph.ButtGravityFwdUp.Value;
+                _dotFwdMiddle = Vector3.one + AniMorph.ButtGravityFwdMid.Value;
+                _dotFwdDown = Vector3.one + AniMorph.ButtGravityFwdDown.Value;
+                _dotRUp = AniMorph.ButtGravityRightUp.Value;
+                _dotRMiddle = AniMorph.ButtGravityRightMid.Value;
+                _dotRDown = AniMorph.ButtGravityRightDown.Value;
+
                 UpdateEffects(AniMorph.ButtEffects.Value);
             }
 
@@ -589,29 +736,29 @@ namespace AniMorph
                 {
                     Effects[GetPower((int)value)] = (enumValue & value) != 0;
                 }
-
-                //Effects[GetPower((int)Effect.Linear)] = (enumValue & Effect.Linear) != 0;
-                //Effects[GetPower((int)Effect.Angular)] = (enumValue & Effect.Angular) != 0;
-                //Effects[GetPower((int)Effect.Tethering)] = (enumValue & Effect.Tethering) != 0;
-                //Effects[GetPower((int)Effect.Acceleration)] = (enumValue & Effect.Acceleration) != 0;
-                //Effects[GetPower((int)Effect.Deceleration)] = (enumValue & Effect.Deceleration) != 0;
-                //Effects[GetPower((int)Effect.GravityLinear)] = (enumValue & Effect.GravityLinear) != 0;
-                //Effects[GetPower((int)Effect.GravityAngular)] = (enumValue & Effect.GravityAngular) != 0;
-                //Effects[GetPower((int)Effect.GravityScale)] = (enumValue & Effect.GravityScale) != 0;
-
-                // Find what power of 2 the number is.
-                static int GetPower(int number)
-                {
-                    var result = 0;
-
-                    while (number > 1)
-                    {
-                        number >>= 1;
-                        result++;
-                    }
-                    return result;
-                }
             }
+        }
+
+        protected void UpdateAngularApplication(AniMorph.Axis enumValue)
+        {
+            foreach (AniMorph.Axis value in Enum.GetValues(typeof(AniMorph.Axis)))
+            {
+                // 1 if true, 0f if false so we can simply multiply it.
+                AngularApplication[GetPower((int)value)] = ((enumValue & value) != 0) ? 1f : 0f;
+            }
+        }
+
+        // Find what power of 2 the number is.
+        private int GetPower(int number)
+        {
+            var result = 0;
+
+            while (number > 1)
+            {
+                number >>= 1;
+                result++;
+            }
+            return result;
         }
 
         /// <summary>
@@ -657,7 +804,9 @@ namespace AniMorph
             GravityScale = 128,
         }
 
-        // For indexing purpose
+        /// <summary>
+        /// For indexing purpose of 'Effect' enum.
+        /// </summary>
         protected enum RefEffect
         {
             // Follow the position as if attached by a rubber spring.

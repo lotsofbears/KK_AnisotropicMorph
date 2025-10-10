@@ -21,23 +21,11 @@ namespace AniMorph
         /// Overload meant for master in tandem setup.
         /// </summary>
         /// <param name="effects">Uses bit shifting</param>
-        internal void AddToModifiers(bool[] effects, Vector3 velocity, float velocityMagnitude, float deltaTime, float unscaledDeltaTime, float masterDotFwd, float masterDotRight)
+        internal void AddToModifiers(bool[] effects, Vector3 velocity, float deltaTime, float masterDotFwd, float masterDotRight)
         {
-            //if (effects[(int)RefEffect.Linear])
-            //    BoneModifierData.PositionModifier += GetLinearOffset(unscaledDeltaTime, out velocity, out var velocityMagnitude);
-
-            //if (effects[(int)RefEffect.Angular])
-            //    BoneModifierData.RotationModifier += GetAngularOffset(unscaledDeltaTime);
-
             if (effects[(int)RefEffect.Tethering])
                 BoneModifierData.RotationModifier += Tethering.GetTetheringOffset(velocity, deltaTime);
-
-            var acceleration = effects[(int)RefEffect.Acceleration];
-            var deceleration = effects[(int)RefEffect.Deceleration];
-
-            if (acceleration || deceleration)
-                BoneModifierData.ScaleModifier = Vector3.Scale(BoneModifierData.ScaleModifier, GetScaleOffset(velocity, velocityMagnitude, deltaTime, acceleration, deceleration));
-
+                      
             if (effects[(int)RefEffect.GravityAngular])
                 BoneModifierData.RotationModifier += GetGravityAngularOffset(masterDotFwd, masterDotRight);
 
@@ -47,49 +35,22 @@ namespace AniMorph
         internal void UpdateModifiers(Vector3 positionModifier, Vector3 rotationModifier, Vector3 scaleModifier)
         {
             BoneModifierData.PositionModifier = positionModifier;
-            BoneModifierData.RotationModifier = rotationModifier;
+            // Remove not allowed axes
+            BoneModifierData.RotationModifier = Vector3.Scale(rotationModifier, AngularApplication);
             BoneModifierData.ScaleModifier = scaleModifier;
         }
 
-        private float _sidewaysAngleLimit = 20f;
-        private Quaternion _upRotation = Quaternion.Euler(90f, 0f, 0f);
-        private Quaternion _downRotation = Quaternion.Euler(-90f, 0f, 0f);
 
-        
-        internal Vector3 GetGravityAngularOffset(float masterDotFwd, float masterDotRight)
+        internal override void OnConfigUpdate(AniMorph.Body part)
         {
-            var dotFwd = masterDotFwd; // Vector3.Dot(Bone.forward, Vector3.up);
-            var dotRight = masterDotRight; // Vector3.Dot(Bone.right, Vector3.up);
+            base.OnConfigUpdate(part);
 
-            //var absDotFwd = Math.Abs(dotFwd);
-            //var absDotRight = Math.Abs(dotRight);
-            var angleLimit = _sidewaysAngleLimit;
-
-            // A way to reduce angle spread when lying face up.
-            if (dotFwd > 0f) dotFwd *= 0.5f;
-            
-            var dotSum = dotFwd + dotRight;
-
-            if (_isLeftPosition) angleLimit = -angleLimit;
-
-            var result = new Vector3(0f, (angleLimit * dotSum), 0f);
-
-            //var boneUp = Bone.up;
-
-            ////var boneRotation = Bone.rotation;
-
-            ////var deltaEuler = (boneRotation * Quaternion.Inverse(_upRotation)).eulerAngles;
-
-            ////var deltaAngleY = Mathf.DeltaAngle(0f, deltaEuler.y);
-
-            ////var deviationY = Mathf.Min(_angleLimitRad, Mathf.Abs(deltaAngleY));
-
-            ////if (deltaAngleY < 0f) deviationY = -deviationY;
-
-            //var lookRot = Quaternion.LookRotation(-Vector3.up, boneUp);
-            ////var result = new Vector3(0f, deviationY * masterFwdDot, 0f);
-            //AniMorph.Logger.LogDebug($"dotFwd[{dotFwd:F3}] dotRight[{dotRight:F3}] dotSum[{dotSum:F3}] result({result.x:F3},{result.y:F3},{result.z:F3})");
-            return result;
+            UpdateAngularApplication(part switch
+            {
+                AniMorph.Body.Breast => AniMorph.BreastAngularApplicationSlave.Value,
+                AniMorph.Body.Butt => AniMorph.ButtAngularApplicationSlave.Value,
+                _ => 0
+            });
         }
     }
 }

@@ -41,7 +41,7 @@ namespace AniMorph
         private static readonly List<List<string>> _tandemList =
             [
             [ Bust, Bust1L, Bust1R ],
-           // [ Butt, ButtL, ButtR ],
+            [ Butt, ButtL, ButtR ],
             ];
 
         private bool _updated;
@@ -221,12 +221,11 @@ namespace AniMorph
         {
             var deltaTime = Time.deltaTime;
             if (deltaTime == 0f) return;
-            var unscaledDeltaTime = Time.unscaledDeltaTime;
-            if (deltaTime > _hugeFrameTime) deltaTime = _hugeFrameTime;
 
+            var fps = 1f / deltaTime;
             foreach (var entry in _updateList)
             {
-                _mainDic[entry].boneModifier.UpdateModifiers(deltaTime, unscaledDeltaTime);
+                _mainDic[entry].boneModifier.UpdateModifiers(deltaTime, fps);
             }
         }
         internal void OnConfigUpdate()
@@ -240,7 +239,7 @@ namespace AniMorph
             {
                 BoneName.Bust or BoneName.Bust1L or BoneName.Bust1R => AniMorph.Body.Breast,
                 BoneName.Butt or BoneName.ButtL or BoneName.ButtR => AniMorph.Body.Butt,
-                _ => AniMorph.Body.None
+                _ => 0
             };
         }
 

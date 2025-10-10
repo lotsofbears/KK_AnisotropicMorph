@@ -15,7 +15,6 @@ namespace AniMorph
     {
         private readonly BoneModifierSlave[] _slaves;
 
-
         internal BoneModifierMaster(
             Transform master,
             BoneModifierSlave[] slaves, 
@@ -26,12 +25,13 @@ namespace AniMorph
         }
 
 
-        internal override void UpdateModifiers(float deltaTime, float unscaledDeltaTime)
+        internal override void UpdateModifiers(float deltaTime, float fps)
         {
+            // TODO Decentralize some calculations?
             var effects = Effects;
 
             // Apply linear offset, its calculations are necessary to other methods even if the offset itself isn't.
-            var positionModifier = GetLinearOffset(unscaledDeltaTime, out var velocity, out var velocityMagnitude);
+            var positionModifier = GetLinearOffset(deltaTime, out var velocity, out var velocityMagnitude);
 
             //// Remove linear offset if setting
             if (!effects[(int)RefEffect.Linear])
@@ -39,36 +39,39 @@ namespace AniMorph
                 positionModifier = Vector3.zero;
             }
             // Apply angular offset
-            var rotationModifier = effects[(int)RefEffect.Angular] ? GetAngularOffset(unscaledDeltaTime) : Vector3.zero;
+            var rotationModifier = effects[(int)RefEffect.Angular] ? GetAngularOffset(deltaTime) : Vector3.zero;
 
-            //// Apply acceleration scale distortion
-            //var scaleModifier = effects[(int)RefEffect.Acceleration] ? GetScaleDistortion(velocity, velocityMagnitude, deltaTime) : Vector3.one;
-            var scaleModifier = Vector3.one;
+            var scaleModifier = Vector3.Scale(
+                BoneModifierData.ScaleModifier,
+                GetScaleOffset(
+                    velocity,
+                    velocityMagnitude,
+                    deltaTime,
+                    fps,
+                    effects[(int)RefEffect.Acceleration],
+                    effects[(int)RefEffect.Deceleration]
+                    )
+                );
 
             var dotUp = Vector3.Dot(Bone.up, Vector3.up);
             var dotR = Vector3.Dot(Bone.right, Vector3.up);
             var dotFwd = Vector3.Dot(Bone.forward, Vector3.up);
 
-            // Apply gravity linear offset if setting
+            // Apply gravity linear offset
             if (effects[(int)RefEffect.GravityLinear])
                 positionModifier += GetGravityPositionOffset(dotUp, dotR);
 
-            // Apply deceleration scale distortion if setting
+            // Apply gravity scale offset
             if (effects[(int)RefEffect.GravityScale])
-                scaleModifier += GetGravityScaleOffset(dotFwd);
+                scaleModifier = Vector3.Scale(scaleModifier, GetGravityScaleOffset(dotFwd));
 
-
-            
-            // Apply only Z axis rotation to master, keep X and Y for slaves.
-            //BoneModifierData.RotationModifier.z = rotationModifier.z;
-
-            BoneModifierData.RotationModifier.z = rotationModifier.z;
-            rotationModifier = new Vector3(0f, rotationModifier.y, 0f);
+            // Discard not allowed axes
+            BoneModifierData.RotationModifier = Vector3.Scale(rotationModifier, AngularApplication);
 
             foreach (var slave in _slaves)
             {
                 slave.UpdateModifiers(positionModifier, rotationModifier, scaleModifier);
-                slave.AddToModifiers(effects, velocity, velocityMagnitude, deltaTime, unscaledDeltaTime, dotFwd, dotR);
+                slave.AddToModifiers(effects, velocity, deltaTime, dotFwd, dotR);
             }
 
             // Store current variables as "previous" for the next frame.
@@ -76,6 +79,17 @@ namespace AniMorph
             StoreVariables(velocity);
         }
 
+        internal override void OnConfigUpdate(AniMorph.Body part)
+        {
+            base.OnConfigUpdate(part);
+
+            UpdateAngularApplication(part switch
+            {
+                AniMorph.Body.Breast => AniMorph.BreastAngularApplicationMaster.Value,
+                AniMorph.Body.Butt => AniMorph.ButtAngularApplicationMaster.Value,
+                _ => 0
+            });
+        }
 
     }
 }
