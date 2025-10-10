@@ -36,7 +36,7 @@ namespace AniMorph
             var deceleration = effects[(int)RefEffect.Deceleration];
 
             if (acceleration || deceleration)
-                BoneModifierData.ScaleModifier = Vector3.Scale(BoneModifierData.ScaleModifier, GetScaleDistortion(velocity, velocityMagnitude, unscaledDeltaTime, acceleration, deceleration));
+                BoneModifierData.ScaleModifier = Vector3.Scale(BoneModifierData.ScaleModifier, GetScaleOffset(velocity, velocityMagnitude, deltaTime, acceleration, deceleration));
 
             if (effects[(int)RefEffect.GravityAngular])
                 BoneModifierData.RotationModifier += GetGravityAngularOffset(masterDotFwd, masterDotRight);

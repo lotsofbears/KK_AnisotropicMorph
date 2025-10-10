@@ -58,8 +58,10 @@ namespace AniMorph
 
             
             // Apply only Z axis rotation to master, keep X and Y for slaves.
+            //BoneModifierData.RotationModifier.z = rotationModifier.z;
+
             BoneModifierData.RotationModifier.z = rotationModifier.z;
-            rotationModifier.z = 0f;
+            rotationModifier = new Vector3(0f, rotationModifier.y, 0f);
 
             foreach (var slave in _slaves)
             {
@@ -68,6 +70,7 @@ namespace AniMorph
             }
 
             // Store current variables as "previous" for the next frame.
+            //AniMorph.Logger.LogDebug($"MasterUpdate:posMod({BoneModifierData.PositionModifier.x:F3},{BoneModifierData.PositionModifier.y:F3},{BoneModifierData.PositionModifier.z:F3}) rotMod{BoneModifierData.RotationModifier} scaleMod{BoneModifierData.ScaleModifier}");
             StoreVariables(velocity);
         }
 

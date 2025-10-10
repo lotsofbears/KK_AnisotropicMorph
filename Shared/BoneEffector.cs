@@ -18,7 +18,8 @@ namespace AniMorph
         private const string Bust1L = "cf_d_bust01_L";
         private const string Bust1R = "cf_d_bust01_R";
 
-        private const string Butt = "cf_j_waist02";
+        private const string Butt = "cf_j_waist02"; // "cf_j_waist02"
+        //private const string ButtForABMX = "cf_s_waist02";
         private const string ButtL = "cf_d_siri_L";
         private const string ButtR = "cf_d_siri_R";
         private const float _hugeFrameTime = 1f / 30f;
@@ -28,7 +29,7 @@ namespace AniMorph
         private readonly Dictionary<BoneName, BoneData> _mainDic = [];
         private readonly List<string> _returnToABMX = [];
         private readonly List<BoneName> _updateList = [];
-        private static readonly List<string> _lonerList =
+        private static readonly List<string> _singleList =
             [
             //Bust1R,
             //Thigh2R,
@@ -40,7 +41,7 @@ namespace AniMorph
         private static readonly List<List<string>> _tandemList =
             [
             [ Bust, Bust1L, Bust1R ],
-            //[ Butt, ButtL, ButtR ],
+           // [ Butt, ButtL, ButtR ],
             ];
 
         private bool _updated;
@@ -73,12 +74,12 @@ namespace AniMorph
             skinnedMesh.BakeMesh(bakedMesh);
 
             // Iterate through singular items
-            foreach (var loner in _lonerList)
+            foreach (var single in _singleList)
             {
-                if (FindBone(_chara, loner, out var boneTransform)
-                    && GetEnumBoneName(loner, out var boneEnum))
+                if (FindBone(_chara, single, out var boneTransform)
+                    && GetEnumBoneName(single, out var boneEnum))
                 {
-                    _returnToABMX.Add(loner);
+                    _returnToABMX.Add(single);
                     _updateList.Add(boneEnum);
                     Transform centeredBoneTransform = null;
                     if (GetCenteredBone(boneEnum, out var centeredBone))
@@ -117,7 +118,8 @@ namespace AniMorph
                 if (FindBone(_chara, master, out var masterTransform)
                     && GetEnumBoneName(master, out var masterEnum))
                 {
-                    _returnToABMX.Add(master);
+                    // Some masters track one bone but apply to another.
+                    _returnToABMX.Add(GetDifferentBoneForApplication(master));
                     // Master updates his slaves
                     _updateList.Add(masterEnum);
 
@@ -182,6 +184,14 @@ namespace AniMorph
                 };
                 return !centeredBone.IsNullOrEmpty();
             }
+            static string GetDifferentBoneForApplication(string name)
+            {
+                return name switch
+                {
+                    //Butt => ButtForABMX,
+                    _ => name,
+                };
+            }
         }
 
         public override IEnumerable<string> GetAffectedBones(BoneController origin) => _returnToABMX;
@@ -221,12 +231,17 @@ namespace AniMorph
         }
         internal void OnConfigUpdate()
         {
-            // Go over all bone modifiers and cache settings into private instance fields.
-            BoneModifier.UpdateSettings();
-            foreach (var value in _mainDic.Values)
+            foreach (var entry in _mainDic)
             {
-                value.boneModifier.OnConfigUpdate();
+                entry.Value.boneModifier.OnConfigUpdate(GetBodyPart(entry.Key));
             }
+
+            static AniMorph.Body GetBodyPart(BoneName boneName) => boneName switch
+            {
+                BoneName.Bust or BoneName.Bust1L or BoneName.Bust1R => AniMorph.Body.Breast,
+                BoneName.Butt or BoneName.ButtL or BoneName.ButtR => AniMorph.Body.Butt,
+                _ => AniMorph.Body.None
+            };
         }
 
         internal void OnChangeAnimator()
@@ -249,7 +264,7 @@ namespace AniMorph
                 Bust1L => BoneName.Bust1L,
                 Bust1R => BoneName.Bust1R,
                 Thigh2R => BoneName.Thigh2R,
-                Butt => BoneName.Butt,
+                Butt  => BoneName.Butt,
                 ButtL => BoneName.ButtL,
                 ButtR => BoneName.ButtR,
                 _ => BoneName.None

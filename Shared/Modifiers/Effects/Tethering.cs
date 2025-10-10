@@ -10,14 +10,14 @@ namespace AniMorph
 
 
         // Multiplier for velocity
-        private float _multiplier = -500;
+        internal float multiplier = -500;
         // Limit of rotation
-        private float _maxAngle = 30f;
+        internal float maxAngle = 30f;
         // Natural frequency of bounce
-        private float _frequency = 3f; // 4f;
+        internal float frequency = 3f; // 4f;
 
         // 0 = undamped, 1 = critically damped
-        private float _dampingR = 0.3f;
+        internal float damping = 0.3f;
 
         private Vector3 _velocity;
         // Current rotation offset
@@ -46,11 +46,11 @@ namespace AniMorph
 
                 //-velocity.z * _influenceZ,
                 0f
-                ) * _multiplier;
+                ) * multiplier;
 
-            targetEuler = Vector3.ClampMagnitude(targetEuler, _maxAngle);
+            targetEuler = Vector3.ClampMagnitude(targetEuler, maxAngle);
 
-            var result = DampedSpring(_position, targetEuler, ref _velocity, _frequency, _dampingR, deltaTime);
+            var result = DampedSpring(_position, targetEuler, ref _velocity, frequency, damping, deltaTime);
             _position = result;
             return result;
         }
