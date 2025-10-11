@@ -453,18 +453,18 @@ namespace AniMorph
             var velocityNormalized = velocity * (1f / velocityMagnitude);
 
             var absVelocityNormalized = new Vector3(Mathf.Abs(velocityNormalized.x), Mathf.Abs(velocityNormalized.y), Mathf.Abs(velocityNormalized.z));
-
             var accelerationVec = (velocity - _prevVelocity) * fps;
             // Project acceleration onto direction to get deceleration if negative
             var accelerationDot = Vector3.Dot(accelerationVec, velocityNormalized);
+
             // Initialize distortion as neutral
             var distortion = Vector3.one;
-
             // Proper acceleration with accumulation or without
             // looks worse then a dumb magnitude based implementation.
             // But hey it's an option.
+
             if (acceleration)
-            {
+            { 
                 var distortionAmount = _scaleAccelerationFactor;
 
                 if (_scaleDumbAcceleration)
@@ -498,17 +498,16 @@ namespace AniMorph
             }
 
             if (deceleration)
-            {
+            { 
+                var decelerationDot = Vector3.Dot(accelerationVec, velocityNormalized);
 
                 //AniMorph.Logger.LogDebug($"Deceleration:dot[{decelerationDot:F3}] " +
                 //    $"totalDeceleration[{_totalDeceleration:F3}" 
                 //    //$"velocityDir({velocityDir.x:F3},{velocityDir.y:F3},{velocityDir.z:F3})" +
                 //    //$"accelerationVec{accelerationVec} accelerationVecMag{accelerationVec.magnitude:F3}"
-                    
                 //    );
                 // Amplify deceleration as it tends to be too small.
                 if (accelerationDot < 0f) accelerationDot *= 2f;
-
                 // Accumulate deceleration, deltaTime is a passive drain to avoid awkward accumulations in some idle animations.
                 var totalDeceleration = Mathf.Clamp01(_scaleAccumulatedDeceleration + accelerationDot - (deltaTime * 0.1f));
                 // Store for the next frame
@@ -562,9 +561,6 @@ namespace AniMorph
 //            }
 //#endif
             _prevScale = finalScale;
-            //_prevAccelerationScale = distortion;
-            //_prevDecelerationScale = decelerationScale;
-
             return finalScale;
         }
 
@@ -572,9 +568,6 @@ namespace AniMorph
 
         protected Vector3 GetGravityPositionOffset(float dotUp, float dotR)
         {
-
-            //var smoothDotUp = NeatStep(Mathf.Abs(dotUp));
-
             var result = Vector3.Lerp(_dotUpMiddle, dotUp > 0f ? _dotUpUp : _dotUpDown, Mathf.Abs(dotUp));
 
             result += Vector3.Lerp(_dotRMiddle, dotR > 0f ? _dotRUp : _dotRDown, Mathf.Abs(dotR));
