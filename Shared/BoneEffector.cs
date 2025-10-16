@@ -151,25 +151,6 @@ namespace AniMorph
 
                     AddToDic(boneEnum, boneTransform, centeredBoneTransform, null, null); // bakedMesh, skinnedMesh);
                 }
-                /*
-                 * An ABMX Plugin that applies a variety of highly customizable effects to a variety of bones to create an illusion of them behaving in a more chaotic–soft way. 
-                 * Works both the Main Game and the Studio but not extensively tested in the latter. Currently only the breast and the butt, other bones wait for an update of ABMX.
-                 * 
-                 * **How it works**
-                 * Very simple, it reads (on early LateUpdate) whatever animator wrote for a frame and applies it in a ~~retarded~~, slow, not immediate fashion with some adjustments.
-                 * After that some bones are also influenced by the Dynamic Bone (default of the game) which amplifies them by own calculations. 
-                 * 
-                 * **Requirements**
-                 * [ABMX](https://github.com/ManlyMarco/ABMX/)
-                 * 
-                 * **Download*
-                 * https://github.com/lotsofbears/KK_AnisotropicMorph/releases
-                 * 
-                 * **Readme and source code**
-                 * https://github.com/lotsofbears/KK_AnisotropicMorph
-                 * 
-                 * 
-                 */
             }
 
             // Iterate through tandems
