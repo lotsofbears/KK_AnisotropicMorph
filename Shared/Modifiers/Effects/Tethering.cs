@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Reflection;
 using System.Text;
 using UnityEngine;
 
@@ -33,26 +34,23 @@ namespace AniMorph
             var localBonePosition = centeredBone.InverseTransformPoint(bonePosition);
             var divider = Mathf.Abs(localBonePosition.x) + Mathf.Abs(localBonePosition.z);
             _influenceZ = divider == 0f ? (0f) : (localBonePosition.x / divider);
-            //_yawInfluence = Mathf.Abs(_yawInfluence);
             _influenceX = 1f - Mathf.Abs(_influenceZ);
         }
 
 
         internal Vector3 GetTetheringOffset(Vector3 velocity, float deltaTime)
         {
+
             var targetEuler = new Vector3(
                 -velocity.y,
                 (velocity.x * _influenceX) + (-velocity.z * _influenceZ),
-
-                //-velocity.z * _influenceZ,
                 0f
                 ) * multiplier;
 
             targetEuler = Vector3.ClampMagnitude(targetEuler, maxAngle);
 
-            var result = DampedSpring(_position, targetEuler, ref _velocity, frequency, damping, deltaTime);
-            _position = result;
-            return result;
+            _position = DampedSpring(_position, targetEuler, ref _velocity, frequency, damping, deltaTime);
+            return _position;
         }
         /// <summary>
         /// Spat out by GPT.

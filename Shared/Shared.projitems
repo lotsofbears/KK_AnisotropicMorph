@@ -9,6 +9,7 @@
     <Import_RootNamespace>AniMorph</Import_RootNamespace>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)AssemblyInfo.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Hooks.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)AniMorphCharaController.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)BoneEffector.cs" />

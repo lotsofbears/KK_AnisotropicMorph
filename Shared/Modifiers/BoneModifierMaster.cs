@@ -79,17 +79,6 @@ namespace AniMorph
             StoreVariables(velocity);
         }
 
-        internal override void OnConfigUpdate(AniMorph.Body part)
-        {
-            base.OnConfigUpdate(part);
-
-            UpdateAngularApplication(part switch
-            {
-                AniMorph.Body.Breast => AniMorph.BreastAngularApplicationMaster.Value,
-                AniMorph.Body.Butt => AniMorph.ButtAngularApplicationMaster.Value,
-                _ => 0
-            });
-        }
 
     }
 }

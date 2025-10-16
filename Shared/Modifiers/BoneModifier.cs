@@ -10,6 +10,7 @@ using System.Text;
 using UnityEngine;
 using UnityEngine.UI.CoroutineTween;
 using static RootMotion.FinalIK.IKSolver;
+using static UnityEngine.UI.Image;
 
 namespace AniMorph
 {
@@ -21,12 +22,15 @@ namespace AniMorph
 
         protected readonly Tethering Tethering;
 
-        // Height / Width ratio
-        private readonly float _height;
-        // Width / Height ratio
-        private readonly float _width;
+        protected KKABMX.Core.BoneModifier BoneModifierABMX;
+
+        //// Height / Width ratio
+        //private readonly float _height;
+        //// Width / Height ratio
+        //private readonly float _width;
 
 
+        protected bool Active;
         // Array with effects to apply, default enum order
         protected readonly bool[] Effects = new bool[Enum.GetNames(typeof(Effect)).Length];
 
@@ -35,10 +39,10 @@ namespace AniMorph
         //// Min scale on perpendicular axes
         //private float _minSquashScale = 0.67f;
 
+
         protected bool _isLeftPosition;
 
-        // localScale.x * localScale.y * localScale.z
-        private float _originalVolume;
+        private readonly float _baseScaleVolume;
         private readonly float _baseScaleMagnitude;
 
         // Snapshots of previous frame
@@ -55,21 +59,18 @@ namespace AniMorph
         private Vector3 _linearLimitNegative;
         private float _linearSpringStrength = 25f;
         private float _linearDamping = 10f;
-        private float _linearMassMultiplier = 1f;
-        private float _linearMass = 1f;
+        private float _massReciprocal = 1f;
+        private float _mass = 1f;
         private float _linearMaxVelocity = 1f;
         private float _linearMaxSqrVelocity = 1f;
         private bool _linearGravity;
 
-        private float SetLinearMassMultiplier
+        internal void SetMass(float value)
         {
-            set
-            {
-                if (value <= 0f) value = 0.01f;
+            if (value <= 0f) value = 0.01f;
 
-                _linearMass = value;
-                _linearMassMultiplier = 1f / value;
-            }
+            _mass = value;
+            _massReciprocal = 1f / value;
         }
 
         private void SetMaxVelocity(float value)
@@ -150,7 +151,7 @@ namespace AniMorph
         {
             if (bone == null)
             {
-                AniMorph.Logger.LogError($"{this.GetType().Name} wasn't initialized due to a wrong parameter.");
+                AniMorph.Logger.LogError($"{GetType().Name}: wasn't initialized due to the lack of bone.");
                 return;
             }
 
@@ -158,7 +159,7 @@ namespace AniMorph
             BoneModifierData = boneModifierData;
             _prevPosition = bone.position;
             _prevRotation = bone.rotation;
-            _originalVolume = bone.localScale.x * bone.localScale.y * bone.localScale.z;
+            _baseScaleVolume = bone.localScale.x * bone.localScale.y * bone.localScale.z;
             _baseScaleMagnitude = bone.localScale.magnitude;
 
             if (centeredBone != null)
@@ -172,81 +173,95 @@ namespace AniMorph
             }
 
             // Skip mesh measurements
-            if (bakedMesh == null || skinnedMesh == null) return;
+            //if (bakedMesh == null || skinnedMesh == null) return;
 
-            var vertices = bakedMesh.vertices;
-            var triangles = bakedMesh.triangles;
-            var t = skinnedMesh.transform;
-            Ray[] rays = [
-                new Ray(bone.position, bone.position + bone.forward), 
-                new Ray(bone.position, bone.position - bone.forward), 
-                new Ray(bone.position, bone.position - bone.right), 
-                new Ray(bone.position, bone.position + bone.right)
-                ];
+            //var vertices = bakedMesh.vertices;
+            //var triangles = bakedMesh.triangles;
+            //var t = skinnedMesh.transform;
+            //Ray[] rays = [
+            //    new Ray(bone.position, bone.position + bone.forward), 
+            //    new Ray(bone.position, bone.position - bone.forward), 
+            //    new Ray(bone.position, bone.position - bone.right), 
+            //    new Ray(bone.position, bone.position + bone.right)
+            //    ];
 
-            float[] closestDist = [Mathf.Infinity, Mathf.Infinity, Mathf.Infinity, Mathf.Infinity];
+            //float[] closestDist = [Mathf.Infinity, Mathf.Infinity, Mathf.Infinity, Mathf.Infinity];
 
-            for (var i = 0; i < triangles.Length; i += 3)
+            //for (var i = 0; i < triangles.Length; i += 3)
+            //{
+            //    var v0 = t.TransformPoint(vertices[triangles[i]]);
+            //    var v1 = t.TransformPoint(vertices[triangles[i + 1]]);
+            //    var v2 = t.TransformPoint(vertices[triangles[i + 2]]);
+
+            //    for (var j = 0; j < rays.Length; j++)
+            //    {
+            //        var ray = rays[j];
+            //        if (IntersectRayTriangle(ray, v0, v1, v2, out var hitPoint))
+            //        {
+            //            var dist = Vector3.Distance(ray.origin, hitPoint);
+            //            if (dist < closestDist[j])
+            //            {
+            //                closestDist[j] = dist;
+            //            }
+            //        }
+            //    }
+            //}
+            //for (var i = 0; i < closestDist.Length; i++)
+            //{
+            //    if (closestDist[i] == Mathf.Infinity)
+            //    {
+            //        AniMorph.Logger.LogError($"{this.GetType().Name} couldn't find the intersection point[{i}].");
+            //    }
+            //}
+            //_height = closestDist[0] + closestDist[1];
+            //_width = closestDist[2] + closestDist[3];
+
+
+            //static bool IntersectRayTriangle(Ray ray, Vector3 v0, Vector3 v1, Vector3 v2, out Vector3 hitPoint)
+            //{
+            //    hitPoint = Vector3.zero;
+            //    Vector3 edge1 = v1 - v0;
+            //    Vector3 edge2 = v2 - v0;
+
+            //    Vector3 h = Vector3.Cross(ray.direction, edge2);
+            //    float a = Vector3.Dot(edge1, h);
+            //    if (Mathf.Abs(a) < Mathf.Epsilon)
+            //        return false; // Ray is parallel to triangle
+
+            //    float f = 1f / a;
+            //    Vector3 s = ray.origin - v0;
+            //    float u = f * Vector3.Dot(s, h);
+            //    if (u < 0f || u > 1f)
+            //        return false;
+
+            //    Vector3 q = Vector3.Cross(s, edge1);
+            //    float v = f * Vector3.Dot(ray.direction, q);
+            //    if (v < 0f || u + v > 1f)
+            //        return false;
+
+            //    // At this stage we can compute t to find out where the intersection point is on the line
+            //    float t = f * Vector3.Dot(edge2, q);
+            //    if (t >= 0f) // ray intersection
+            //    {
+            //        hitPoint = ray.origin + ray.direction * t;
+            //        return true;
+            //    }
+
+            //    return false; // Line intersection but not a ray intersection
+            //}
+        }
+
+        protected KKABMX.Core.BoneModifier FindBoneModifier(BoneController origin)
+        {
+            var boneName = Bone.name;
+            foreach (var boneModifier in origin.GetAllModifiers())
             {
-                var v0 = t.TransformPoint(vertices[triangles[i]]);
-                var v1 = t.TransformPoint(vertices[triangles[i + 1]]);
-                var v2 = t.TransformPoint(vertices[triangles[i + 2]]);
-
-                for (var j = 0; j < rays.Length; j++)
+                if (boneModifier.BoneName.Equals(boneName))
                 {
-                    var ray = rays[j];
-                    if (IntersectRayTriangle(ray, v0, v1, v2, out var hitPoint))
-                    {
-                        var dist = Vector3.Distance(ray.origin, hitPoint);
-                        if (dist < closestDist[j])
-                        {
-                            closestDist[j] = dist;
-                        }
-                    }
+                    return boneModifier;
                 }
             }
-            for (var i = 0; i < closestDist.Length; i++)
-            {
-                if (closestDist[i] == Mathf.Infinity)
-                {
-                    AniMorph.Logger.LogError($"{this.GetType().Name} couldn't find the intersection point[{i}].");
-                }
-            }
-            _height = closestDist[0] + closestDist[1];
-            _width = closestDist[2] + closestDist[3];
-
-            static bool IntersectRayTriangle(Ray ray, Vector3 v0, Vector3 v1, Vector3 v2, out Vector3 hitPoint)
-            {
-                hitPoint = Vector3.zero;
-                Vector3 edge1 = v1 - v0;
-                Vector3 edge2 = v2 - v0;
-
-                Vector3 h = Vector3.Cross(ray.direction, edge2);
-                float a = Vector3.Dot(edge1, h);
-                if (Mathf.Abs(a) < Mathf.Epsilon)
-                    return false; // Ray is parallel to triangle
-
-                float f = 1f / a;
-                Vector3 s = ray.origin - v0;
-                float u = f * Vector3.Dot(s, h);
-                if (u < 0f || u > 1f)
-                    return false;
-
-                Vector3 q = Vector3.Cross(s, edge1);
-                float v = f * Vector3.Dot(ray.direction, q);
-                if (v < 0f || u + v > 1f)
-                    return false;
-
-                // At this stage we can compute t to find out where the intersection point is on the line
-                float t = f * Vector3.Dot(edge2, q);
-                if (t >= 0f) // ray intersection
-                {
-                    hitPoint = ray.origin + ray.direction * t;
-                    return true;
-                }
-
-                return false; // Line intersection but not a ray intersection
-            }
+            return null;
         }
 
         /// <summary>
@@ -254,6 +269,8 @@ namespace AniMorph
         /// </summary>
         internal virtual void UpdateModifiers(float deltaTime, float fps)
         {
+            if (!Active) return;
+
             var effects = Effects;
 
             // Apply linear offset, its calculations are necessary to other methods even if the offset itself isn't.
@@ -261,9 +278,8 @@ namespace AniMorph
 
             //// Remove linear offset if setting
             if (!effects[(int)RefEffect.Linear])
-            {
                 positionModifier = Vector3.zero;
-            }
+
             // Apply angular offset
             var rotationModifier = effects[(int)RefEffect.Angular] ? GetAngularOffset(deltaTime) : Vector3.zero;
 
@@ -300,6 +316,8 @@ namespace AniMorph
             boneModifierData.RotationModifier = rotationModifier;
             boneModifierData.ScaleModifier = scaleModifier;
 
+            //AniMorph.Logger.LogDebug($"{MethodBase.GetCurrentMethod().Name}:rotationModifier[{boneModifierData.PositionModifier}]");
+
             // Store current variables as "previous" for the next frame.
             StoreVariables(velocity);
         }
@@ -330,10 +348,10 @@ namespace AniMorph
             // Apply gravity force
             if (_linearGravity)
             {
-                totalForce += _linearMass * Bone.InverseTransformDirection(_linearGravityForce);
+                totalForce += _mass * Bone.InverseTransformDirection(_linearGravityForce);
             }
             // a = F / m
-            var acceleration = totalForce * (_linearMassMultiplier * deltaTime);
+            var acceleration = totalForce * (_massReciprocal * deltaTime);
 
             
             // Limit axes
@@ -409,7 +427,7 @@ namespace AniMorph
                 newRotation = Quaternion.Slerp(currentRotation, newRotation, _angularMaxAngle / absAngle);
 
             var result = (Quaternion.Inverse(currentRotation) * newRotation).eulerAngles;
-           // _prevRotation = Quaternion.Euler(result) * _prevRotation;
+            // _prevRotation = Quaternion.Euler(result) * _prevRotation;
             //AniMorph.Logger.LogDebug($"angle[{angle}] deltaEuler{deltaRotation.eulerAngles} result{result} prevRotation{prevRotation} newRotation{newRotation} currentRotation{currentRotation} angularVelocity{angularVelocity}");
             return result;
         }
@@ -425,8 +443,15 @@ namespace AniMorph
             _prevScale = Vector3.one;
             _scaleAccumulatedAcceleration = 0f;
             _scaleAccumulatedDeceleration = 0f;
-            //_prevAccelerationScale = Vector3.one;
-            //_prevDecelerationScale = Vector3.one;
+
+            // TODO Standard ABMX doesn't have it yet
+#if DEBUG
+            var boneController = Bone.GetComponentInParent<BoneController>();
+            if (boneController != null)
+            {
+                BoneModifierABMX ??= boneController.CollectBaselineOnUpdate(Bone.name, BoneLocation.Unknown, KKABMX.Core.Baseline.Rotation);
+            }
+#endif
         }
 
         protected void StoreVariables(Vector3 velocity)
@@ -545,7 +570,7 @@ namespace AniMorph
             {
                 // Preserve original volume
                 var stretchVolume = distortion.x * distortion.y * distortion.z;
-                var volumeCorrection = Mathf.Pow(_originalVolume / stretchVolume, (1f / 3f));
+                var volumeCorrection = Mathf.Pow(_baseScaleVolume / stretchVolume, (1f / 3f));
                 distortion *= volumeCorrection;
             }
 
@@ -639,6 +664,7 @@ namespace AniMorph
 #endif
             OnChangeAnimator();
 
+
             if (part == AniMorph.Body.Breast)
             {
                 _linearSpringStrength = AniMorph.BreastLinearSpringStrength.Value;
@@ -647,7 +673,7 @@ namespace AniMorph
                 _linearGravity = AniMorph.BreastLinearGravity.Value != 0f;
                 _linearLimitPositive = AniMorph.BreastLinearLimitPositive.Value;
                 _linearLimitNegative = AniMorph.BreastLinearLimitNegative.Value;
-                SetLinearMassMultiplier = AniMorph.BreastLinearMass.Value;
+                //SetLinearMassMultiplier = AniMorph.BreastLinearMass.Value;
 
                 _angularSpringStrength = AniMorph.BreastAngularSpringStrength.Value;
                 _angularDamping = AniMorph.BreastAngularDamping.Value;
@@ -689,7 +715,7 @@ namespace AniMorph
                 _linearGravity = AniMorph.ButtLinearGravity.Value != 0f;
                 _linearLimitPositive = AniMorph.ButtLinearLimitPositive.Value;
                 _linearLimitNegative = AniMorph.ButtLinearLimitNegative.Value;
-                SetLinearMassMultiplier = AniMorph.ButtLinearMass.Value;
+                //SetLinearMassMultiplier = AniMorph.ButtLinearMass.Value;
 
                 _angularSpringStrength = AniMorph.ButtAngularSpringStrength.Value;
                 _angularDamping = AniMorph.ButtAngularDamping.Value;
@@ -702,7 +728,7 @@ namespace AniMorph
                 _scaleUnevenDistribution = AniMorph.ButtScaleUnevenDistribution.Value;
                 _scalePreserveVolume = AniMorph.ButtScalePreserveVolume.Value;
                 _scaleDumbAcceleration = AniMorph.ButtScaleDumbAcceleration.Value;
-
+#if DEBUG
                 if (Tethering != null)
                 {
                     Tethering.multiplier = AniMorph.ButtTetheringMultiplier.Value;
@@ -719,15 +745,66 @@ namespace AniMorph
                 _dotRUp = AniMorph.ButtGravityRightUp.Value;
                 _dotRMiddle = AniMorph.ButtGravityRightMid.Value;
                 _dotRDown = AniMorph.ButtGravityRightDown.Value;
-
+#endif
                 UpdateEffects(AniMorph.ButtEffects.Value);
+                UpdateAngularApplication(AniMorph.ButtAngularApplicationMaster.Value);
+            }
+            else if (part == AniMorph.Body.Thigh)
+            {
+#if DEBUG
+                _linearSpringStrength = AniMorph.ThighLinearSpringStrength.Value;
+                _linearDamping = AniMorph.ThighLinearDamping.Value;
+                _linearGravityForce = new Vector3(0f, AniMorph.ThighLinearGravity.Value, 0f);
+                _linearGravity = AniMorph.ThighLinearGravity.Value != 0f;
+                _linearLimitPositive = AniMorph.ThighLinearLimitPositive.Value;
+                _linearLimitNegative = AniMorph.ThighLinearLimitNegative.Value;
+                //SetLinearMassMultiplier = AniMorph.ThighLinearMass.Value;
+
+                _angularSpringStrength = AniMorph.ThighAngularSpringStrength.Value;
+                _angularDamping = AniMorph.ThighAngularDamping.Value;
+                _angularMaxAngle = AniMorph.ThighAngularMaxAngle.Value;
+
+                _scaleAccelerationFactor = AniMorph.ThighScaleAccelerationFactor.Value;
+                _scaleDecelerationFactor = AniMorph.ThighScaleDecelerationFactor.Value;
+                _scaleLerpSpeed = AniMorph.ThighScaleLerpSpeed.Value;
+                _scaleMaxDistortion = AniMorph.ThighScaleMaxDistortion.Value;
+                _scaleUnevenDistribution = AniMorph.ThighScaleUnevenDistribution.Value;
+                _scalePreserveVolume = AniMorph.ThighScalePreserveVolume.Value;
+                _scaleDumbAcceleration = AniMorph.ThighScaleDumbAcceleration.Value;
+
+                if (Tethering != null)
+                {
+                    Tethering.multiplier = AniMorph.ThighTetheringMultiplier.Value;
+                    Tethering.frequency = AniMorph.ThighTetheringFrequency.Value;
+                    Tethering.damping = AniMorph.ThighTetheringDamping.Value;
+                    Tethering.maxAngle = AniMorph.ThighTetheringMaxAngle.Value;
+                }
+                _dotUpUp = AniMorph.ThighGravityUpUp.Value;
+                _dotUpMiddle = AniMorph.ThighGravityUpMid.Value;
+                _dotUpDown = AniMorph.ThighGravityUpDown.Value;
+                _dotFwdUp = Vector3.one + AniMorph.ThighGravityFwdUp.Value;
+                _dotFwdMiddle = Vector3.one + AniMorph.ThighGravityFwdMid.Value;
+                _dotFwdDown = Vector3.one + AniMorph.ThighGravityFwdDown.Value;
+                _dotRUp = AniMorph.ThighGravityRightUp.Value;
+                _dotRMiddle = AniMorph.ThighGravityRightMid.Value;
+                _dotRDown = AniMorph.ThighGravityRightDown.Value;
+
+                UpdateEffects(AniMorph.ThighEffects.Value);
+                UpdateAngularApplication(AniMorph.ThighAngularApplicationMaster.Value);
+#endif
             }
 
             void UpdateEffects(Effect enumValue)
             {
+                // Disable modifier until new effects are known
+                Active = false;
                 foreach (Effect value in Enum.GetValues(typeof(Effect)))
                 {
-                    Effects[GetPower((int)value)] = (enumValue & value) != 0;
+                    var enabled = (enumValue & value) != 0;
+
+                    Effects[GetPower((int)value)] = enabled;
+
+                    if (enabled) Active = true;
                 }
             }
         }

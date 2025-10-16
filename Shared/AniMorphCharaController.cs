@@ -6,6 +6,7 @@ using Manager;
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using UnityEngine;
 
@@ -16,70 +17,124 @@ namespace AniMorph
         public BoneEffector BoneEffector => _boneEffector;
 
         private BoneEffector _boneEffector;
+#if DEBUG
 
-        private float _degPerSec = 0f;
+        private bool _rotate;
 
+        private Quaternion _rotation;
 
-        private bool IsHScene
+        public Vector3 SetRotation
+        {
+            get => _rotation.eulerAngles;
+            set
+            {
+                _rotate = value != Vector3.zero;
+                _rotation = Quaternion.Euler(value);
+            }
+        }
+        private bool _follow;
+        private bool Follow
+        {
+            get => _follow;
+            set  
+            { 
+                _follow = value; 
+                _prevPosition = _bust.position; 
+                _prevRotation = _bust.rotation;
+            }
+        }
+
+        private Transform _bust;
+        private Transform _camera;
+        private Vector3 _prevPosition;
+        private Quaternion _prevRotation;
+#endif
+
+        private void OnDisable()
+        {
+            _boneEffector?.OnDisable();
+        }
+
+        private bool IsProperScene
         {
             get
             {
+                var scene =
 #if KK
-                return Scene.Instance.AddSceneName.Equals("HProc");
-#else
-                return Scene.AddSceneName.Equals("HProc");
+                 Scene.Instance.AddSceneName;
+#elif KKS
+                 Scene.AddSceneName;
 #endif
+                return scene.Equals(String.Empty) || scene.Equals("HProc");
             }
         }
 
         protected override void Start()
         {
             base.Start();
-            if (!IsHScene || ChaControl == null || ChaControl.sex == 0)
+
+            if (!IsProperScene || ChaControl == null || ChaControl.sex == 0)
             {
                 Destroy(this);
             }
             else
             {
                 StartCoroutine(StartCo());
+
+                enabled = AniMorph.Enable.Value;
+#if DEBUG
+                _bust = ChaControl.transform.GetComponentsInChildren<Transform>()
+                    .Where(t => t.name.Equals("cf_j_waist02"))
+                    .FirstOrDefault();
+                var flag = FindObjectOfType<HFlag>();
+                _camera = flag.ctrlCamera.transform.parent;
+#endif
             }
         }
 
         private IEnumerator StartCo()
         {
-            var count = 0;
             var endOfFrame = CoroutineUtils.WaitForEndOfFrame;
             while (Time.deltaTime > 1f / 30f) // || count++ < 1000)
             {
+#if DEBUG
                 AniMorph.Logger.LogDebug("StartCo:deltaTime wait");
+#endif
                 yield return endOfFrame;
             }
 
             var boneController = ChaControl.GetComponent<BoneController>();
             if (boneController == null)
             {
-                AniMorph.Logger.LogDebug("StartCo:no bone controller");
                 Destroy(this);
             }
             else
             {
                 if (_boneEffector == null)
                 {
-                    AniMorph.Logger.LogDebug("StartCo:no boneEffector");
                     _boneEffector = new BoneEffector(ChaControl);
                     boneController.AddBoneEffect(_boneEffector);
                 }
 
             }
-            //enabled = AniM.Enable.Value;
         }
 
         protected override void Update()
         {
             base.Update();
+#if DEBUG
+            if (_rotate) ChaControl.transform.rotation *= _rotation;
 
-            // DEBUG 
-            if (_degPerSec > 0f) ChaControl.transform.rotation = Quaternion.Euler(0f, _degPerSec * Time.deltaTime, 0f) * ChaControl.transform.rotation;
+            if (_follow)
+            {
+
+                //_camera.rotation *= Quaternion.Inverse(_prevRotation) * _bust.rotation;
+                _camera.position += _bust.position - _prevPosition;
+
+                _prevPosition = _bust.position;
+                _prevRotation = _bust.rotation;
+            }
+#endif
 
             _boneEffector?.OnUpdate();
         }
@@ -90,16 +145,6 @@ namespace AniMorph
         }
 
         protected override void OnCardBeingSaved(GameMode currentGameMode)
-        {
-
-        }
-
-        internal void OnChangeAnimator()
-        {
-
-        }
-
-        internal void OnSetPlay()
         {
 
         }
