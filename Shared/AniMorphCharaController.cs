@@ -83,6 +83,7 @@ namespace AniMorph
                 StartCoroutine(StartCo());
 
                 // Enable if chara is male and male setting is selected, same for female.
+                HandleEnable();
 #if DEBUG
                 _bust = ChaControl.transform.GetComponentsInChildren<Transform>()
                     .Where(t => t.name.Equals("cf_j_waist02"))

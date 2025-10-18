@@ -16,7 +16,6 @@ namespace AniMorph
     [BepInPlugin(GUID, Name, Version)]
     [BepInProcess(KoikatuAPI.GameProcessName)]
     [BepInProcess(KoikatuAPI.StudioProcessName)]
-    [BepInDependency(KoikatuAPI.GUID, KoikatuAPI.VersionConst)]
     [BepInDependency(KKABMX_Core.GUID, KKABMX_Core.Version)]
 
 #if KK
@@ -238,11 +237,11 @@ namespace AniMorph
             BreastAngularMaxAngle = Config.Bind("Breast", "AngularMaxAngle", 45f, 
                 new ConfigDescription("Rotational lag won't exceed this value in degrees", new AcceptableValueRange<float>(1f, 90f), new ConfigurationManagerAttributes { Order = 59 }));
 
-            BreastAngularApplicationMaster = Config.Bind("Breast", "AngularApplicationRoot", Axis.Z,
-                new ConfigDescription("WARNING: Will glitch out outside of the default settings on ABMX 5.3 or older\nWhich axis or rotational lag should be applied to the root", null, new ConfigurationManagerAttributes { Order = 58, IsAdvanced = true }));
+            BreastAngularApplicationMaster = Config.Bind("Breast", "AngularApplyToRoot", Axis.Z,
+                new ConfigDescription("Which axes or rotational lag should be applied to the root bone of the breast", null, new ConfigurationManagerAttributes { Order = 58 }));
 
-            BreastAngularApplicationSlave = Config.Bind("Breast", "AngularApplicationBone", Axis.X | Axis.Y,
-                new ConfigDescription("WARNING: Will glitch out outside of the default settings on ABMX 5.3 or older\nWhich axis or rotational lag should be applied to the bone", null, new ConfigurationManagerAttributes { Order = 57, IsAdvanced = true }));
+            BreastAngularApplicationSlave = Config.Bind("Breast", "AngularApplyToBone", Axis.X | Axis.Y,
+                new ConfigDescription("Which axes or rotational lag should be applied to the breast bones", null, new ConfigurationManagerAttributes { Order = 57 }));
 
             BreastScaleAccelerationFactor = Config.Bind("Breast", "ScaleAccelerationFactor", 0.35f, 
                 new ConfigDescription("Strength of deformation during acceleration", null, new ConfigurationManagerAttributes { Order = 50 }));
@@ -336,11 +335,12 @@ namespace AniMorph
             ButtAngularMaxAngle = Config.Bind("Butt", "AngularMaxAngle", 45f,
                 new ConfigDescription("Rotational lag won't exceed this value in degrees", new AcceptableValueRange<float>(1f, 90f), new ConfigurationManagerAttributes { Order = 59 }));
 
-            ButtAngularApplicationMaster = Config.Bind("Butt", "AngularApplicationRoot", (Axis)0,
-                new ConfigDescription("WARNING: Will glitch out outside of the default settings on ABMX 5.3 or older\nWhich axis or rotational lag should be applied to the root", null, new ConfigurationManagerAttributes { Order = 58, IsAdvanced = true }));
+            // Might be THE controversial setting so far.
+            ButtAngularApplicationMaster = Config.Bind("Butt", "AngularApplyToRoot", Axis.X | Axis.Y | Axis.Z,
+                new ConfigDescription("Which axes or rotational lag should be applied to the root of the butt bones", null, new ConfigurationManagerAttributes { Order = 58 }));
 
-            ButtAngularApplicationSlave = Config.Bind("Butt", "AngularApplicationBone", (Axis)0,
-                new ConfigDescription("WARNING: Will glitch out outside of the default settings on ABMX 5.3 or older\nWhich axis or rotational lag should be applied to the bone", null, new ConfigurationManagerAttributes { Order = 57, IsAdvanced = true }));
+            ButtAngularApplicationSlave = Config.Bind("Butt", "AngularApplyToBone", Axis.X | Axis.Y | Axis.Z,
+                new ConfigDescription("Which axes or rotational lag should be applied to the butt bones", null, new ConfigurationManagerAttributes { Order = 57 }));
 
             ButtScaleAccelerationFactor = Config.Bind("Butt", "ScaleAccelerationFactor", 0.15f,
                 new ConfigDescription("Strength of deformation during acceleration", null, new ConfigurationManagerAttributes { Order = 50 }));

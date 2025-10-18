@@ -444,14 +444,12 @@ namespace AniMorph
             _scaleAccumulatedAcceleration = 0f;
             _scaleAccumulatedDeceleration = 0f;
 
-            // TODO Standard ABMX doesn't have it yet
-#if DEBUG
+            // Added in ABMX 5.4+
             var boneController = Bone.GetComponentInParent<BoneController>();
             if (boneController != null)
             {
                 BoneModifierABMX ??= boneController.CollectBaselineOnUpdate(Bone.name, BoneLocation.Unknown, KKABMX.Core.Baseline.Rotation);
             }
-#endif
         }
 
         protected void StoreVariables(Vector3 velocity)
@@ -662,8 +660,6 @@ namespace AniMorph
 #if DEBUG
             AniMorph.Logger.LogDebug($"{GetType().Name}.{MethodBase.GetCurrentMethod().Name}:Pop");
 #endif
-            OnChangeAnimator();
-
 
             if (part == AniMorph.Body.Breast)
             {
@@ -793,6 +789,8 @@ namespace AniMorph
                 UpdateAngularApplication(AniMorph.ThighAngularApplicationMaster.Value);
 #endif
             }
+
+            OnChangeAnimator();
 
             void UpdateEffects(Effect enumValue)
             {
