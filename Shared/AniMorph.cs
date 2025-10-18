@@ -1,6 +1,7 @@
 ﻿using BepInEx;
 using BepInEx.Configuration;
 using BepInEx.Logging;
+using KKABMX.Core;
 using KKAPI;
 using KKAPI.Chara;
 using KKAPI.Utilities;
@@ -15,6 +16,8 @@ namespace AniMorph
     [BepInPlugin(GUID, Name, Version)]
     [BepInProcess(KoikatuAPI.GameProcessName)]
     [BepInProcess(KoikatuAPI.StudioProcessName)]
+    [BepInDependency(KoikatuAPI.GUID, KoikatuAPI.VersionConst)]
+    [BepInDependency(KKABMX_Core.GUID, KKABMX_Core.Version)]
 
 #if KK
     [BepInProcess(KoikatuAPI.GameProcessNameSteam)]

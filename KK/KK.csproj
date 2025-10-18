@@ -53,8 +53,8 @@
       <HintPath>..\packages\IllusionLibs.BepInEx.5.4.22\lib\net35\BepInEx.dll</HintPath>
       <Private>False</Private>
     </Reference>
-    <Reference Include="KKABMX, Version=5.3.0.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\packages\ABMX.KKABMX.5.3.0\lib\net35\KKABMX.dll</HintPath>
+    <Reference Include="KKABMX, Version=5.4.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>..\packages\ABMX.KKABMX.5.4.0\lib\net35\KKABMX.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="KKAPI, Version=1.42.2.0, Culture=neutral, processorArchitecture=MSIL">
