@@ -25,7 +25,7 @@ namespace AniMorph
     {
         public const string GUID = "AniMorph.ABMX";
         public const string Name = "Anisotropic Morph";
-        public const string Version = "0.1";
+        public const string Version = "0.2";
 
 
 
