@@ -7,6 +7,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Cryptography;
 using System.Text;
 using UnityEngine;
 
@@ -73,7 +74,7 @@ namespace AniMorph
         {
             base.Start();
 
-            if (!IsProperScene || ChaControl == null || ChaControl.sex == 0)
+            if (!IsProperScene || ChaControl == null)
             {
                 Destroy(this);
             }
@@ -81,7 +82,7 @@ namespace AniMorph
             {
                 StartCoroutine(StartCo());
 
-                enabled = AniMorph.Enable.Value;
+                // Enable if chara is male and male setting is selected, same for female.
 #if DEBUG
                 _bust = ChaControl.transform.GetComponentsInChildren<Transform>()
                     .Where(t => t.name.Equals("cf_j_waist02"))
@@ -91,9 +92,18 @@ namespace AniMorph
 #endif
             }
         }
+        internal void HandleEnable()
+        {
+            var setting = AniMorph.Enable.Value;
+            enabled = 
+                (ChaControl.sex == 0 && (setting & AniMorph.Gender.Male) != 0) 
+                || 
+                (ChaControl.sex == 1 && (setting & AniMorph.Gender.Female) != 0);
+        }
 
         private IEnumerator StartCo()
         {
+            // Wait for loading-scene-lag to avoid delta time spikes and chara teleportation.
             var endOfFrame = CoroutineUtils.WaitForEndOfFrame;
             while (Time.deltaTime > 1f / 30f) // || count++ < 1000)
             {

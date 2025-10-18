@@ -32,7 +32,7 @@ namespace AniMorph
 
         internal new static ManualLogSource Logger;
 
-        public static ConfigEntry<bool> Enable;
+        public static ConfigEntry<Gender> Enable;
 
         #region Breast
 
@@ -179,7 +179,7 @@ namespace AniMorph
         {
             Logger = base.Logger;
 
-            Enable = Config.Bind("", "Enable", true, new ConfigDescription("State of the plugin", null, new ConfigurationManagerAttributes { Order = 100 }));
+            Enable = Config.Bind("", "Enable", Gender.Male | Gender.Female, new ConfigDescription("Choose none to disable", null, new ConfigurationManagerAttributes { Order = 100 }));
 
             CharacterApi.RegisterExtraBehaviour<AniMorphCharaController>(GUID);
 
@@ -445,6 +445,7 @@ namespace AniMorph
             var configTypeVector = typeof(ConfigEntry<Vector3>);
             var configTypeFloat = typeof(ConfigEntry<float>);
             var configTypeBool = typeof(ConfigEntry<bool>);
+            var configTypeGender = typeof(ConfigEntry<Gender>);
 
             foreach (var f in fields)
             {
@@ -473,6 +474,11 @@ namespace AniMorph
                     var configEntry = (ConfigEntry<Axis>)f.GetValue(null);
                     configEntry.SettingChanged += (_, _) => UpdateConfig();
                 }
+                else if (f.FieldType == configTypeGender)
+                {
+                    var configEntry = (ConfigEntry<Gender>)f.GetValue(null);
+                    configEntry.SettingChanged += (_, _) => UpdateConfig();
+                }
             }
         }
 
@@ -489,7 +495,7 @@ namespace AniMorph
                 if (charaController != null && charaController.GetType() == type)
                 {
                     var aniMorphCharaController = (AniMorphCharaController)charaController;
-                    aniMorphCharaController.enabled = Enable.Value;
+                    aniMorphCharaController.HandleEnable();
                     aniMorphCharaController.BoneEffector.OnConfigUpdate();
                 }
             }
@@ -525,6 +531,12 @@ namespace AniMorph
             X = 1,
             Y = 2,
             Z = 4,
+        }
+        [Flags]
+        public enum Gender
+        {
+            Male = 1,
+            Female = 2,
         }
         
     }
