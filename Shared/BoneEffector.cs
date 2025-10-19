@@ -342,6 +342,7 @@ namespace AniMorph
                 _mainDic[entry].boneModifier.OnChangeAnimator();
             }
         }
+
         internal void OnSetPlay(string animName)
         {
 

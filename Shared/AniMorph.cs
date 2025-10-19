@@ -1,6 +1,7 @@
 ﻿using BepInEx;
 using BepInEx.Configuration;
 using BepInEx.Logging;
+using HarmonyLib;
 using KKABMX.Core;
 using KKAPI;
 using KKAPI.Chara;
@@ -34,6 +35,7 @@ namespace AniMorph
         internal new static ManualLogSource Logger;
 
         public static ConfigEntry<Gender> Enable;
+        public static ConfigEntry<bool> MaleEnableDB;
 
         #region Breast
 
@@ -182,13 +184,20 @@ namespace AniMorph
 
             Enable = Config.Bind("", "Enable", Gender.Male | Gender.Female, new ConfigDescription("Choose none to disable", null, new ConfigurationManagerAttributes { Order = 100 }));
 
+
             CharacterApi.RegisterExtraBehaviour<AniMorphCharaController>(GUID);
 
             BindConfig();
 
             AddSettingChangedParam();
 
+
+            MaleEnableDB = Config.Bind("", "MaleEnableDB", true, new ConfigDescription("Force enable Dynamic Bones on males in Main Game as they are usually turned off", null, new ConfigurationManagerAttributes { Order = 99 }));
+            MaleEnableDB.SettingChanged += (_, _) => HooksMaleEnableDB.ApplyHooks();
             // Avoid hooking this one up for UpdateConfig().
+
+            Hooks.ApplyHooks();
+            HooksMaleEnableDB.ApplyHooks();
         }
 
         private void BindConfig()
@@ -338,8 +347,8 @@ namespace AniMorph
                 new ConfigDescription("Rotational lag won't exceed this value in degrees", new AcceptableValueRange<float>(1f, 90f), new ConfigurationManagerAttributes { Order = 59 }));
 
             // Might be THE controversial setting so far.
-            ButtAngularApplicationMaster = Config.Bind("Butt", "AngularApplyToRoot", Axis.X | Axis.Y | Axis.Z,
-                new ConfigDescription("Which axes or rotational lag should be applied to the root of the butt bones", null, new ConfigurationManagerAttributes { Order = 58 }));
+            ButtAngularApplicationMaster = Config.Bind("Butt", "AngularApplyToRootWIP", (Axis)0,
+                new ConfigDescription("Which axes or rotational lag should be applied to the root of the butt bones", null, new ConfigurationManagerAttributes { Order = 58, IsAdvanced = true }));
 
             ButtAngularApplicationSlave = Config.Bind("Butt", "AngularApplyToBone", Axis.X | Axis.Y | Axis.Z,
                 new ConfigDescription("Which axes or rotational lag should be applied to the butt bones", null, new ConfigurationManagerAttributes { Order = 57 }));
@@ -454,31 +463,43 @@ namespace AniMorph
                 if (f.FieldType == configTypeVector)
                 {
                     var configEntry = (ConfigEntry<Vector3>)f.GetValue(null);
+
+                    if (configEntry == null) continue;
                     configEntry.SettingChanged += (_, _) => UpdateConfig();
                 }
                 else if (f.FieldType == configTypeFloat)
                 {
                     var configEntry = (ConfigEntry<float>)f.GetValue(null);
+
+                    if (configEntry == null) continue;
                     configEntry.SettingChanged += (_, _) => UpdateConfig();
                 }
                 else if (f.FieldType == configTypeEffect)
                 {
                     var configEntry = (ConfigEntry<Effect>)f.GetValue(null);
+
+                    if (configEntry == null) continue;
                     configEntry.SettingChanged += (_, _) => UpdateConfig();
                 }
                 else if (f.FieldType == configTypeBool)
                 {
                     var configEntry = (ConfigEntry<bool>)f.GetValue(null);
+
+                    if (configEntry == null) continue;
                     configEntry.SettingChanged += (_, _) => UpdateConfig();
                 }
                 else if (f.FieldType == configTypeAxis)
                 {
                     var configEntry = (ConfigEntry<Axis>)f.GetValue(null);
+
+                    if (configEntry == null) continue;
                     configEntry.SettingChanged += (_, _) => UpdateConfig();
                 }
                 else if (f.FieldType == configTypeGender)
                 {
                     var configEntry = (ConfigEntry<Gender>)f.GetValue(null);
+
+                    if (configEntry == null) continue;
                     configEntry.SettingChanged += (_, _) => UpdateConfig();
                 }
             }
