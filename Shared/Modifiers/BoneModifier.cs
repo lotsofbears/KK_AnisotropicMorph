@@ -44,6 +44,7 @@ namespace AniMorph
 
         private readonly float _baseScaleVolume;
         private readonly float _baseScaleMagnitude;
+        private readonly bool _animatedBone;
 
         // Snapshots of previous frame
         protected Vector3 _prevVelocity;
@@ -147,7 +148,7 @@ namespace AniMorph
         /// <param name="bone">Bone that will be modified.</param>
         /// <param name="bakedMesh">Baked skinned mesh</param>
         /// <param name="skinnedMesh"></param>
-        internal BoneModifier(Transform bone, Transform centeredBone, Mesh bakedMesh, SkinnedMeshRenderer skinnedMesh, BoneModifierData boneModifierData)
+        internal BoneModifier(Transform bone, Transform centeredBone, Mesh bakedMesh, SkinnedMeshRenderer skinnedMesh, BoneModifierData boneModifierData, bool animatedBone)
         {
             if (bone == null)
             {
@@ -161,6 +162,7 @@ namespace AniMorph
             _prevRotation = bone.rotation;
             _baseScaleVolume = bone.localScale.x * bone.localScale.y * bone.localScale.z;
             _baseScaleMagnitude = bone.localScale.magnitude;
+            _animatedBone = animatedBone;
 
             if (centeredBone != null)
             {
@@ -444,11 +446,14 @@ namespace AniMorph
             _scaleAccumulatedAcceleration = 0f;
             _scaleAccumulatedDeceleration = 0f;
 
-            // Added in ABMX 5.4+
-            var boneController = Bone.GetComponentInParent<BoneController>();
-            if (boneController != null)
+            if (_animatedBone)
             {
-                BoneModifierABMX ??= boneController.CollectBaselineOnUpdate(Bone.name, BoneLocation.Unknown, KKABMX.Core.Baseline.Rotation);
+                // Added in ABMX 5.4+
+                var boneController = Bone.GetComponentInParent<BoneController>();
+                if (boneController != null)
+                {
+                    BoneModifierABMX ??= boneController.CollectBaselineOnUpdate(Bone.name, BoneLocation.Unknown, KKABMX.Core.Baseline.Rotation);
+                }
             }
         }
 
@@ -650,7 +655,7 @@ namespace AniMorph
 
             //var lookRot = Quaternion.LookRotation(-Vector3.up, boneUp);
             ////var result = new Vector3(0f, deviationY * masterFwdDot, 0f);
-            //AniMorph.Logger.LogDebug($"dotFwd[{dotFwd:F3}] dotRight[{dotRight:F3}] dotSum[{dotSum:F3}] result({result.x:F3},{result.y:F3},{result.z:F3})");
+            //AniMorph.Logger.LogDebug($"{GetType().Name}.{MethodBase.GetCurrentMethod().Name}:dotFwd[{dotFwd:F3}] dotRight[{dotRight:F3}] result({result.x:F3},{result.y:F3},{result.z:F3})");
             return result;
         }
 

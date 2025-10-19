@@ -52,6 +52,17 @@ namespace AniMorph
             [ Butt, ButtL, ButtR ],
             ];
 
+        private static readonly Dictionary<BoneName, List<bool>> _animatedBones = new()
+        {
+            // BoneName + gender (0 = male, 1 = female)
+            { BoneName.Bust1L,  [false, false] },
+            { BoneName.Bust1R,  [false, false] },
+            { BoneName.Bust,  [true, true] },
+            { BoneName.Butt, [true, true] },
+            { BoneName.ButtL, [true, true] },
+            { BoneName.ButtR, [true, true] },
+        };
+
         // BodyPart + boneNames-defaultMass pairs
         private static readonly Dictionary<Body, BodyPartMeasurement> _bonesToCheckForSizeDic = new()
         {
@@ -100,7 +111,6 @@ namespace AniMorph
             //}
             //var bakedMesh = new Mesh();
             //skinnedMesh.BakeMesh(bakedMesh);
-
 
             // Set mass for each bone based on the scale
             var allBones = _chara.transform.GetComponentsInChildren<Transform>();
@@ -204,8 +214,10 @@ namespace AniMorph
                 // Perform null checks
                 if (_mainDic.ContainsKey(boneName) || boneTransform == null) return;
 
+                var animatedBone = _animatedBones.TryGetValue(boneName, out var valueList) ? valueList[(int)Mathf.Clamp01(_chara.sex)] : false;
+
                 var boneModifierData = new BoneModifierData();
-                _mainDic.Add(boneName, new BoneData(new BoneModifier(boneTransform, centeredBone, bakedMesh, skinnedMesh, boneModifierData), boneModifierData));
+                _mainDic.Add(boneName, new BoneData(new BoneModifier(boneTransform, centeredBone, bakedMesh, skinnedMesh, boneModifierData, animatedBone), boneModifierData));
             }
 
             void AddToDicTandem(BoneName master, BoneName[] slaves, Transform masterTransform, Transform[] slaveTransforms, Mesh bakedMesh, SkinnedMeshRenderer skinnedMesh)
@@ -224,14 +236,17 @@ namespace AniMorph
                 var boneModifierDataSlaves = new BoneModifierData[slaves.Length];
                 for (var i = 0; i < slaves.Length; i++)
                 {
+
+                    var animatedBoneSlave = _animatedBones.TryGetValue(slaves[i], out var valueListSlave) ? valueListSlave[(int)Mathf.Clamp01(_chara.sex)] : false;
                     boneModifierDataSlaves[i] = new();
-                    boneModifierSlaves[i] = new BoneModifierSlave(slaveTransforms[i], masterTransform, bakedMesh, skinnedMesh, boneModifierDataSlaves[i]);
+                    boneModifierSlaves[i] = new BoneModifierSlave(slaveTransforms[i], masterTransform, bakedMesh, skinnedMesh, boneModifierDataSlaves[i], animatedBoneSlave);
                     _mainDic.Add(slaves[i], new BoneData(boneModifierSlaves[i], boneModifierDataSlaves[i]));
                 }
 
                 // Add master with slaves
+                var animatedBoneMaster = _animatedBones.TryGetValue(master, out var valueList) ? valueList[(int)Mathf.Clamp01(_chara.sex)] : false;
                 var boneModifierDataMaster = new BoneModifierData();
-                _mainDic.Add(master, new BoneData(new BoneModifierMaster(masterTransform, boneModifierSlaves, boneModifierDataMaster), boneModifierDataMaster));
+                _mainDic.Add(master, new BoneData(new BoneModifierMaster(masterTransform, boneModifierSlaves, boneModifierDataMaster, animatedBoneMaster), boneModifierDataMaster));
 
             }
             bool GetCenteredBone(BoneName boneName, out string centeredBone)

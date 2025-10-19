@@ -12,7 +12,13 @@ namespace AniMorph
 
 
 
-        internal BoneModifierSlave(Transform bone, Transform centeredBone, Mesh bakedMesh, SkinnedMeshRenderer skinnedMesh, KKABMX.Core.BoneModifierData boneModifierData) : base(bone, centeredBone, bakedMesh, skinnedMesh, boneModifierData)
+        internal BoneModifierSlave(
+            Transform bone, 
+            Transform centeredBone, 
+            Mesh bakedMesh, 
+            SkinnedMeshRenderer skinnedMesh, 
+            KKABMX.Core.BoneModifierData boneModifierData, 
+            bool animatedBone) : base(bone, centeredBone, bakedMesh, skinnedMesh, boneModifierData, animatedBone)
         {
 
         }
@@ -31,6 +37,9 @@ namespace AniMorph
                 BoneModifierData.RotationModifier += GetGravityAngularOffset(masterDotFwd, masterDotRight);
 
             _prevVelocity = velocity;
+//#if DEBUG
+//            AniMorph.Logger.LogDebug($"{GetType().Name}.{MethodBase.GetCurrentMethod().Name}: position{BoneModifierData.PositionModifier} rotation{BoneModifierData.RotationModifier} scale{BoneModifierData.ScaleModifier}");
+//#endif
         }
 
         internal void UpdateModifiers(Vector3 positionModifier, Vector3 rotationModifier, Vector3 scaleModifier)

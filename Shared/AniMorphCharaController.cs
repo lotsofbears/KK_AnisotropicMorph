@@ -80,10 +80,7 @@ namespace AniMorph
             }
             else
             {
-                StartCoroutine(StartCo());
-
-                // Enable if chara is male and male setting is selected, same for female.
-                HandleEnable();
+                HandleEnable(forceStart: true);
 #if DEBUG
                 _bust = ChaControl.transform.GetComponentsInChildren<Transform>()
                     .Where(t => t.name.Equals("cf_j_waist02"))
@@ -93,16 +90,52 @@ namespace AniMorph
 #endif
             }
         }
-        internal void HandleEnable()
+        internal void HandleEnable(bool forceStart = false)
         {
+
             var setting = AniMorph.Enable.Value;
+
+            var wasEnabled = enabled;
+
+            // Enable if chara is male and male setting is selected, same for female.
             enabled = 
                 (ChaControl.sex == 0 && (setting & AniMorph.Gender.Male) != 0) 
                 || 
                 (ChaControl.sex == 1 && (setting & AniMorph.Gender.Female) != 0);
+
+            var boneController = ChaControl.GetComponent<BoneController>();
+            if (boneController == null)
+            {
+                Destroy(this);
+                return;
+            }
+
+            if (forceStart || wasEnabled != enabled)
+            {
+                StopAllCoroutines();
+
+                if (enabled)
+                {
+                    if (_boneEffector == null)
+                    {
+                        StartCoroutine(StartCo(boneController));
+                    }
+                }
+                else
+                {
+                    if (_boneEffector != null)
+                    {
+                        boneController.RemoveBoneEffect(_boneEffector);
+                        _boneEffector = null;
+                        boneController.NeedsBaselineUpdate = true;
+                    }
+                }
+            }
+            
+
         }
 
-        private IEnumerator StartCo()
+        private IEnumerator StartCo(BoneController boneController)
         {
             // Wait for loading-scene-lag to avoid delta time spikes and chara teleportation.
             var endOfFrame = CoroutineUtils.WaitForEndOfFrame;
@@ -113,21 +146,8 @@ namespace AniMorph
 #endif
                 yield return endOfFrame;
             }
-
-            var boneController = ChaControl.GetComponent<BoneController>();
-            if (boneController == null)
-            {
-                Destroy(this);
-            }
-            else
-            {
-                if (_boneEffector == null)
-                {
-                    _boneEffector = new BoneEffector(ChaControl);
-                    boneController.AddBoneEffect(_boneEffector);
-                }
-
-            }
+            _boneEffector = new BoneEffector(ChaControl);
+            boneController.AddBoneEffect(_boneEffector);
         }
 
         protected override void Update()
@@ -150,6 +170,12 @@ namespace AniMorph
             _boneEffector?.OnUpdate();
         }
 
+        public void OnConfigUpdate()
+        {
+            HandleEnable();
+            _boneEffector?.OnConfigUpdate();
+        }
+
         protected override void OnReload(GameMode currentGameMode)
         {
 
@@ -159,5 +185,6 @@ namespace AniMorph
         {
 
         }
+
     }
 }

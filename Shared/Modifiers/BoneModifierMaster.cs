@@ -18,8 +18,9 @@ namespace AniMorph
         internal BoneModifierMaster(
             Transform master,
             BoneModifierSlave[] slaves, 
-            BoneModifierData boneModifierData
-            ) : base(master, null, null, null, boneModifierData)
+            BoneModifierData boneModifierData,
+            bool animatedBone
+            ) : base(master, null, null, null, boneModifierData, animatedBone)
         {
             _slaves = slaves;
         }

@@ -16,7 +16,9 @@ namespace AniMorph
     [BepInPlugin(GUID, Name, Version)]
     [BepInProcess(KoikatuAPI.GameProcessName)]
     [BepInProcess(KoikatuAPI.StudioProcessName)]
+#if !DEBUG
     [BepInDependency(KKABMX_Core.GUID, KKABMX_Core.Version)]
+#endif
 
 #if KK
     [BepInProcess(KoikatuAPI.GameProcessNameSteam)]
@@ -386,7 +388,7 @@ namespace AniMorph
             ButtGravityRightMid = Config.Bind("Butt", "GravityRightMid", Vector3.zero, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = -106, IsAdvanced = true }));
             ButtGravityRightDown = Config.Bind("Butt", "GravityRightDown", new Vector3(0.025f, -0.02f, 0f), new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = -107, IsAdvanced = true }));
 #endif
-            #endregion
+#endregion
 
 #if DEBUG
             #region Spine2
@@ -495,8 +497,7 @@ namespace AniMorph
                 if (charaController != null && charaController.GetType() == type)
                 {
                     var aniMorphCharaController = (AniMorphCharaController)charaController;
-                    aniMorphCharaController.HandleEnable();
-                    aniMorphCharaController.BoneEffector.OnConfigUpdate();
+                    aniMorphCharaController.OnConfigUpdate();
                 }
             }
         }
