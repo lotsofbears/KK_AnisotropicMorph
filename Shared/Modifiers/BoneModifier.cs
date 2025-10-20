@@ -643,7 +643,7 @@ namespace AniMorph
             var angleLimit = _sidewaysAngleLimit;
 
             // A way to reduce angle spread when lying face up.
-            if (dotFwd > 0f) dotFwd *= 0.5f;
+            if (dotFwd > 0f) dotFwd *= 0.33f;
 
             if (_isLeftPosition) angleLimit = -angleLimit;
 
