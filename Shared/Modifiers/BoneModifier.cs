@@ -382,9 +382,16 @@ namespace AniMorph
                 velocityMagnitude = maxVelocity;
             }
 
-                //localVelocity = Vector3.ClampMagnitude(currentVelocity, 1f);
-
-                //KS.Logger.LogDebug($"displacement{localDelta} magnitude:{localDeltaMagnitude} velocity({velocity.x:F4},{velocity.y:F4},{velocity.z:F4})");
+            //localVelocity = Vector3.ClampMagnitude(currentVelocity, 1f);
+//#if DEBUG
+//            AniMorph.Logger.LogDebug($"{GetType().Name}.{MethodBase.GetCurrentMethod().Name}:{Bone.name} - " +
+//                $"localMagnitudeZero[{localDeltaMagnitude}] velocityMagnitude[{velocityMagnitude}]" +
+//                $"curPos{Bone.position} prevPos{_prevPosition} totalForce[{totalForce:F3}] mass[{(_massReciprocal * deltaTime):F3}]" +
+//                $"velocity({velocity.x:F3},{velocity.y:F3},{velocity.z:F3})" +
+//                $"localDelta({localDelta.x},{localDelta.y},{localDelta.z})" +
+//                $"springForce({springForce.x:F3},{springForce.y:F3},{springForce.z:F3})" +
+//                $"dampingForce({dampingForce.x:F3},{dampingForce.y:F3},{dampingForce.z:F3})");
+//#endif
 
             var result = localDelta - velocity;
 
@@ -613,8 +620,9 @@ namespace AniMorph
         protected Vector3 GetGravityScaleOffset(float dotFwd)
         {
             var result = Vector3.Lerp(_dotFwdMiddle, dotFwd > 0f ? _dotFwdUp : _dotFwdDown, Mathf.Abs(dotFwd));
-
-            //AniMorph.Logger.LogDebug($"GravityScaleOffset:dotFwd[{dotFwd:F3}] result({result.x:F3},{result.y:F3},{result.z:F3})");
+//#if DEBUG
+//            AniMorph.Logger.LogDebug($"{GetType().Name}.{MethodBase.GetCurrentMethod().Name}:dotFwd[{dotFwd:F3}] result({result.x:F3},{result.y:F3},{result.z:F3})");
+//#endif
 
             return result;
         }

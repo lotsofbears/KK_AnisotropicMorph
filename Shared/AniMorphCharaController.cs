@@ -81,13 +81,13 @@ namespace AniMorph
             else
             {
                 HandleEnable(forceStart: true);
-#if DEBUG
-                _bust = ChaControl.transform.GetComponentsInChildren<Transform>()
-                    .Where(t => t.name.Equals("cf_j_waist02"))
-                    .FirstOrDefault();
-                var flag = FindObjectOfType<HFlag>();
-                _camera = flag.ctrlCamera.transform.parent;
-#endif
+//#if DEBUG
+//                _bust = ChaControl.transform.GetComponentsInChildren<Transform>()
+//                    .Where(t => t.name.Equals("cf_j_waist02"))
+//                    .FirstOrDefault();
+//                var flag = FindObjectOfType<HFlag>();
+//                _camera = flag.ctrlCamera.transform.parent;
+//#endif
             }
         }
         internal void HandleEnable(bool forceStart = false)
@@ -138,8 +138,10 @@ namespace AniMorph
         private IEnumerator StartCo(BoneController boneController)
         {
             // Wait for loading-scene-lag to avoid delta time spikes and chara teleportation.
+            // Requires atleast a frame wait because we are ahead of ABMX init, 3 for a better measurement.
+            var count = 3;
             var endOfFrame = CoroutineUtils.WaitForEndOfFrame;
-            while (Time.deltaTime > 1f / 30f) // || count++ < 1000)
+            while (count-- > 0 || Time.deltaTime > 1f / 30f) // || count++ < 1000)
             {
 #if DEBUG
                 AniMorph.Logger.LogDebug("StartCo:deltaTime wait");
