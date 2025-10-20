@@ -1,12 +1,15 @@
 ﻿using KKABMX.Core;
 using KKAPI;
 using KKAPI.Chara;
+using KKAPI.MainGame;
+using KKAPI.Studio;
 using KKAPI.Utilities;
 using Manager;
 using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using UnityEngine;
@@ -66,33 +69,15 @@ namespace AniMorph
 #elif KKS
                  Scene.AddSceneName;
 #endif
-                return scene.Equals(String.Empty) || scene.Equals("HProc");
+#if DEBUG
+                AniMorph.Logger.LogDebug($"{GetType().Name}.{MethodBase.GetCurrentMethod().Name}:scene[{scene}] insideStudio[{StudioAPI.InsideStudio}] hScene[{GameAPI.InsideHScene}]");
+#endif
+                return StudioAPI.InsideStudio || scene.Equals("HProc");
             }
         }
 
-        protected override void Start()
-        {
-            base.Start();
-
-            if (!IsProperScene || ChaControl == null)
-            {
-                Destroy(this);
-            }
-            else
-            {
-                HandleEnable(forceStart: true);
-//#if DEBUG
-//                _bust = ChaControl.transform.GetComponentsInChildren<Transform>()
-//                    .Where(t => t.name.Equals("cf_j_waist02"))
-//                    .FirstOrDefault();
-//                var flag = FindObjectOfType<HFlag>();
-//                _camera = flag.ctrlCamera.transform.parent;
-//#endif
-            }
-        }
         internal void HandleEnable(bool forceStart = false)
         {
-
             var setting = AniMorph.Enable.Value;
 
             var wasEnabled = enabled;
@@ -106,9 +91,9 @@ namespace AniMorph
             var boneController = ChaControl.GetComponent<BoneController>();
             if (boneController == null)
             {
-                Destroy(this);
-                return;
+                throw new Exception($"No ABMX BoneController on {ChaControl.name}");
             }
+
 
             if (forceStart || wasEnabled != enabled)
             {
@@ -116,6 +101,8 @@ namespace AniMorph
 
                 if (enabled)
                 {
+                    if (forceStart) RemoveBoneEffector();
+
                     if (_boneEffector == null)
                     {
                         StartCoroutine(StartCo(boneController));
@@ -123,15 +110,17 @@ namespace AniMorph
                 }
                 else
                 {
-                    if (_boneEffector != null)
-                    {
-                        boneController.RemoveBoneEffect(_boneEffector);
-                        _boneEffector = null;
-                        boneController.NeedsBaselineUpdate = true;
-                    }
+                    RemoveBoneEffector();
                 }
             }
-            
+            void RemoveBoneEffector()
+            {
+                if (_boneEffector == null) return;
+
+                boneController.RemoveBoneEffect(_boneEffector);
+                _boneEffector = null;
+                boneController.NeedsBaselineUpdate = true;
+            }
 
         }
 
@@ -141,7 +130,7 @@ namespace AniMorph
             // Requires atleast a frame wait because we are ahead of ABMX init, 3 for a better measurement.
             var count = 3;
             var endOfFrame = CoroutineUtils.WaitForEndOfFrame;
-            while (count-- > 0 || Time.deltaTime > 1f / 30f) // || count++ < 1000)
+            while (count-- > 0 ||Time.deltaTime > 1f / 30f) // || count++ < 1000)
             {
 #if DEBUG
                 AniMorph.Logger.LogDebug("StartCo:deltaTime wait");
@@ -180,7 +169,25 @@ namespace AniMorph
 
         protected override void OnReload(GameMode currentGameMode)
         {
+#if DEBUG
+            AniMorph.Logger.LogDebug($"{GetType().Name}.{MethodBase.GetCurrentMethod().Name}:Pop");
 
+#endif
+            if (!IsProperScene || ChaControl == null)
+            {
+                Destroy(this);
+            }
+            else
+            {
+                HandleEnable(forceStart: true);
+                //#if DEBUG
+                //                _bust = ChaControl.transform.GetComponentsInChildren<Transform>()
+                //                    .Where(t => t.name.Equals("cf_j_waist02"))
+                //                    .FirstOrDefault();
+                //                var flag = FindObjectOfType<HFlag>();
+                //                _camera = flag.ctrlCamera.transform.parent;
+                //#endif
+            }
         }
 
         protected override void OnCardBeingSaved(GameMode currentGameMode)
