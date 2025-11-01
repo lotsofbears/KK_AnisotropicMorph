@@ -49,7 +49,7 @@ namespace AniMorph
 
         [HarmonyPostfix]
         [HarmonyPatch(typeof(HSceneProc), nameof(HSceneProc.ChangeAnimator))]
-        public static void HSceneProc_ChangeAnimator_Postfix(HSceneProc.AnimationListInfo _nextAinmInfo)
+        public static void HSceneProc_ChangeAnimator_Postfix(HSceneProc.AnimationListInfo _nextAinmInfo, HSceneProc __instance)
         {
             var type = typeof(AniMorphCharaController);
             foreach (var charaController in CharacterApi.GetBehaviours())
@@ -59,6 +59,28 @@ namespace AniMorph
                     ((AniMorphCharaController)charaController).BoneEffector?.OnChangeAnimator();
                 }
             }
+#if KK
+            if (AniMorph.MaleEnableDB.Value)
+            {
+                if (__instance.male != null)
+                    EnableCharaDB(__instance.male);
+
+                // Account for versions without 2nd male.
+                var traverse = Traverse.Create(__instance);
+                var male1 = traverse.Field("male1").GetValue<ChaControl>();
+
+                if (male1 != null)
+                    EnableCharaDB(male1);
+            }
+
+            static void EnableCharaDB(ChaControl chara)
+            {
+                foreach (ChaInfo.DynamicBoneKind dbKind in Enum.GetValues(typeof(ChaInfo.DynamicBoneKind)))
+                {
+                    chara.playDynamicBoneBust(dbKind, true);
+                }
+            }
+#endif
         }
 
 
@@ -78,6 +100,10 @@ namespace AniMorph
 
     }
 
+    
+    /// <summary>
+    /// Harmony hook to enable dynamic bones on males in KKS
+    /// </summary>
     public class HooksMaleEnableDB
     {
         private static Harmony _patchMaleEnableDB;
@@ -86,6 +112,8 @@ namespace AniMorph
 #if DEBUG
             AniMorph.Logger.LogDebug($"ApplyMaleEnableDB[{AniMorph.MaleEnableDB.Value}]");
 #endif
+            // KK doesn't proactively setup male DBs, so we do it on animator change.
+#if KKS
             if (AniMorph.MaleEnableDB.Value)
             {
                 _patchMaleEnableDB ??= Harmony.CreateAndPatchAll(typeof(HooksMaleEnableDB));
@@ -98,31 +126,19 @@ namespace AniMorph
                     _patchMaleEnableDB = null;
                 }
             }
-        }
-        [HarmonyPrefix]
-        [HarmonyPatch(typeof(ChaControl), nameof(ChaControl.playDynamicBoneBust), [typeof(int), typeof(bool)])]
-        public static void playDynamicBoneBustPostfix1(int _nArea, ref bool _bPlay, ChaControl __instance)
-        {
-            // Enabled instead of disabling DBs on males
-            if (!_bPlay && __instance.sex == 0)
-            {
-#if DEBUG
-                AniMorph.Logger.LogDebug($"{MethodBase.GetCurrentMethod().Name}:[{_bPlay} => [{!_bPlay}]");
 #endif
-                _bPlay = true;
-
-            }
         }
+
         [HarmonyPrefix]
         [HarmonyPatch(typeof(ChaControl), nameof(ChaControl.playDynamicBoneBust), [typeof(ChaInfo.DynamicBoneKind), typeof(bool)])]
-        public static void playDynamicBoneBustPostfix2(ChaInfo.DynamicBoneKind _eArea, ref bool _bPlay, ChaControl __instance)
+        public static void playDynamicBoneBustPrefix2(ChaInfo.DynamicBoneKind _eArea, ref bool _bPlay, ChaControl __instance)
         {
+#if DEBUG
+            AniMorph.Logger.LogDebug($"{MethodBase.GetCurrentMethod().Name}:eArea[{_eArea}] bPlay[{_bPlay}] male[{__instance.sex == 0}]");
+#endif
             // Enabled instead of disabling DBs on males
             if (!_bPlay && __instance.sex == 0)
             {
-#if DEBUG
-                AniMorph.Logger.LogDebug($"{MethodBase.GetCurrentMethod().Name}:[{_bPlay} => [{!_bPlay}]");
-#endif
                 _bPlay = true;
 
             }

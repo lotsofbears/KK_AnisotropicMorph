@@ -133,7 +133,7 @@ namespace AniMorph
             while (count-- > 0 ||Time.deltaTime > 1f / 30f) // || count++ < 1000)
             {
 #if DEBUG
-                AniMorph.Logger.LogDebug("StartCo:deltaTime wait");
+                AniMorph.Logger.LogDebug($"StartCo:deltaTime[{Time.deltaTime:F3}]");
 #endif
                 yield return endOfFrame;
             }
