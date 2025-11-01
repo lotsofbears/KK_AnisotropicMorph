@@ -318,22 +318,30 @@ namespace AniMorph
             foreach (var keyValuePair in _mainDic)
             {
                 var bodyPart = GetBodyPart(keyValuePair.Key);
-                keyValuePair.Value.boneModifier.OnConfigUpdate(bodyPart);
+                keyValuePair.Value.boneModifier.OnConfigUpdate(bodyPart, _chara);
 
                 var mass = _bodyPartSizeDic.TryGetValue(bodyPart, out var value) ? value : 1f;
 
                 keyValuePair.Value.boneModifier.SetMass(mass);
             }
-
-            static Body GetBodyPart(BoneName boneName) => boneName switch
-            {
-                BoneName.Bust or BoneName.Bust1L or BoneName.Bust1R => Body.Breast,
-                BoneName.Butt or BoneName.ButtL or BoneName.ButtR => Body.Butt,
-                BoneName.Thigh1R or BoneName.Thigh2R or BoneName.Thigh3R => Body.Thigh,
-                _ => 0
-            };
         }
 
+        internal void OnSetClothesState(ChaControl chara)
+        {
+            foreach (var keyValuePair in _mainDic)
+            {
+                var bodyPart = GetBodyPart(keyValuePair.Key);
+                keyValuePair.Value.boneModifier.OnSetClothesState(bodyPart, chara);
+            }
+        }
+
+        private Body GetBodyPart(BoneName boneName) => boneName switch
+        {
+            BoneName.Bust or BoneName.Bust1L or BoneName.Bust1R => Body.Breast,
+            BoneName.Butt or BoneName.ButtL or BoneName.ButtR => Body.Butt,
+            BoneName.Thigh1R or BoneName.Thigh2R or BoneName.Thigh3R => Body.Thigh,
+            _ => 0
+        };
 
         internal void OnChangeAnimator()
         {

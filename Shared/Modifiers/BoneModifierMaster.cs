@@ -28,6 +28,7 @@ namespace AniMorph
 
         internal override void UpdateModifiers(float deltaTime, float fps)
         {
+            if (!Active) return;
             // TODO Decentralize some calculations?
             var effects = Effects;
 

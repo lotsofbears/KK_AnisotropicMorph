@@ -98,6 +98,15 @@ namespace AniMorph
             }
         }
 
+        [HarmonyPostfix]
+        [HarmonyPatch(typeof(ChaControl), nameof(ChaControl.SetClothesState))]
+        public static void SetClothesStatePostfix(int clothesKind, byte state, ChaControl __instance)
+        {
+#if DEBUG
+            AniMorph.Logger.LogDebug($"{MethodBase.GetCurrentMethod().Name}:clothesKind[{clothesKind}] state[{state}]");
+#endif
+            AniMorphCharaController.OnSetClothesState(__instance);
+        }
     }
 
     

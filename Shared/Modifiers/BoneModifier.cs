@@ -668,7 +668,7 @@ namespace AniMorph
         }
 
         
-        internal virtual void OnConfigUpdate(AniMorph.Body part)
+        internal virtual void OnConfigUpdate(AniMorph.Body part, ChaControl chara)
         {
 #if DEBUG
             AniMorph.Logger.LogDebug($"{GetType().Name}.{MethodBase.GetCurrentMethod().Name}:Pop");
@@ -804,6 +804,7 @@ namespace AniMorph
             }
 
             OnChangeAnimator();
+            OnSetClothesState(part, chara);
 
             void UpdateEffects(Effect enumValue)
             {
@@ -818,6 +819,52 @@ namespace AniMorph
                     if (enabled) Active = true;
                 }
             }
+        }
+
+
+        internal void OnSetClothesState(AniMorph.Body part, ChaControl chara)
+        {
+            var settingValue = part switch
+            {
+                AniMorph.Body.Breast => AniMorph.BreastDisableWhenClothes.Value,
+                AniMorph.Body.Butt => AniMorph.ButtDisableWhenClothes.Value,
+                _ => (AniMorph.ClothesKind)0
+            };
+
+            if (settingValue == 0 || chara.objClothes == null) return;
+
+            var slotList = new List<int>();
+
+            foreach (var enumValue in AniMorph.ClothesKindValues)
+            {
+                var activeSlot = (settingValue & enumValue) != 0;
+
+                if (!activeSlot) continue;
+
+                slotList.Add(GetPower((int)enumValue));
+            }
+
+            foreach (var slot in slotList)
+            {
+                if (chara.objClothes.Length >= slot
+                    && chara.objClothes[slot] != null 
+                    && chara.fileStatus.clothesState.Length >= slot 
+                    && chara.fileStatus.clothesState[slot] == 0)
+                {
+                    Active = false;
+                    return;
+                }
+            }
+
+            foreach (var effect in Effects)
+            {
+                if (effect)
+                {
+                    Active = true;
+                    return;
+                }
+            }
+
         }
 
         protected void UpdateAngularApplication(AniMorph.Axis enumValue)

@@ -51,9 +51,9 @@ namespace AniMorph
         }
 
 
-        internal override void OnConfigUpdate(AniMorph.Body part)
+        internal override void OnConfigUpdate(AniMorph.Body part, ChaControl chara)
         {
-            base.OnConfigUpdate(part);
+            base.OnConfigUpdate(part, chara);
 
             UpdateAngularApplication(part switch
             {

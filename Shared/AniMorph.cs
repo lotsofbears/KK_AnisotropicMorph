@@ -41,6 +41,7 @@ namespace AniMorph
 
         public static ConfigEntry<Effect> BreastEffects;
         public static ConfigEntry<bool> BreastAdjustForSize;
+        public static ConfigEntry<ClothesKind> BreastDisableWhenClothes;
 
         public static ConfigEntry<float> BreastLinearGravity;
         public static ConfigEntry<float> BreastLinearSpringStrength;
@@ -85,6 +86,7 @@ namespace AniMorph
 
         public static ConfigEntry<Effect> ButtEffects;
         public static ConfigEntry<bool> ButtAdjustForSize;
+        public static ConfigEntry<ClothesKind> ButtDisableWhenClothes;
 
         public static ConfigEntry<float> ButtLinearGravity;
         public static ConfigEntry<float> ButtLinearSpringStrength;
@@ -220,6 +222,9 @@ namespace AniMorph
             BreastAdjustForSize = Config.Bind("Breast", "AdjustForSize", true,
                 new ConfigDescription("Adjust effects for the breast size\nUpdates after the scene change", null, new ConfigurationManagerAttributes { Order = 109 }));
 
+            BreastDisableWhenClothes = Config.Bind("Breast", "DisableClothed", ClothesKind.Top | ClothesKind.Bra,
+                new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 108 }));
+
             BreastLinearSpringStrength = Config.Bind("Breast", "LinearStrength", 15f, 
                 new ConfigDescription("Strength of positional lag\nBigger value – more effort put out", null, new ConfigurationManagerAttributes { Order = 100 }));
 
@@ -317,6 +322,9 @@ namespace AniMorph
 
             ButtAdjustForSize = Config.Bind("Butt", "AdjustForSize", true,
                 new ConfigDescription("Adjust effects for the butt size", null, new ConfigurationManagerAttributes { Order = 109 }));
+
+            ButtDisableWhenClothes = Config.Bind("Butt", "DisableClothed", ClothesKind.Panty,
+                new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 108 }));
 
             ButtLinearSpringStrength = Config.Bind("Butt", "LinearStrength", 21f,
                 new ConfigDescription("Strength of positional lag\nBigger value – more effort put out", null, new ConfigurationManagerAttributes { Order = 100 }));
@@ -560,6 +568,25 @@ namespace AniMorph
             Male = 1,
             Female = 2,
         }
-        
+        public static readonly ClothesKind[] ClothesKindValues = Enum.GetValues(typeof(ClothesKind)) as ClothesKind[];
+        [Flags]
+        public enum ClothesKind
+        {
+            Top = 1,
+            Bot = 2,
+            Bra = 4,
+            Panty = 8,
+            Gloves = 16,
+            Pantyhose = 32,
+            Socks = 64,
+#if KK
+            ShoesIn = 128,
+            ShoesOut = 256,
+#elif KKS
+            Shoes = 256,
+#endif
+        }
+
+
     }
 }

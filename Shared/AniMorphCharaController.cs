@@ -19,6 +19,8 @@ namespace AniMorph
     internal class AniMorphCharaController : CharaCustomFunctionController
     {
         public BoneEffector BoneEffector => _boneEffector;
+        private static readonly List<AniMorphCharaController> _instances = [];
+
 
         private BoneEffector _boneEffector;
 #if DEBUG
@@ -53,6 +55,18 @@ namespace AniMorph
         private Vector3 _prevPosition;
         private Quaternion _prevRotation;
 #endif
+
+        protected override void Awake()
+        {
+            base.Awake();
+            _instances.Add(this);
+        }
+
+        protected override void OnDestroy()
+        {
+            base.OnDestroy();
+            _instances.Remove(this);
+        }
 
         private void OnDisable()
         {
@@ -193,6 +207,20 @@ namespace AniMorph
         protected override void OnCardBeingSaved(GameMode currentGameMode)
         {
 
+        }
+
+        internal static void OnSetClothesState(ChaControl chara)
+        {
+            if (chara == null) return;
+
+            foreach (var instance in _instances)
+            {
+                if (instance.ChaControl == chara)
+                {
+                    instance._boneEffector?.OnSetClothesState(chara);
+                    return;
+                }
+            }
         }
 
     }
