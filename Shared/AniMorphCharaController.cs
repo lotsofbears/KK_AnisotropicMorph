@@ -23,6 +23,7 @@ namespace AniMorph
 
 
         private BoneEffector _boneEffector;
+
 #if DEBUG
 
         private bool _rotate;
@@ -144,7 +145,15 @@ namespace AniMorph
             // Requires atleast a frame wait because we are ahead of ABMX init, 3 for a better measurement.
             var count = 3;
             var endOfFrame = CoroutineUtils.WaitForEndOfFrame;
-            while (count-- > 0 ||Time.deltaTime > 1f / 30f) // || count++ < 1000)
+
+            // Don't filter lags (unless huge) in the studio or if setting.
+            var settingValue = AniMorph.FilterDeltaTime.Value;
+            var bigDeltaTime = 
+                StudioAPI.InsideStudio ? 1f 
+                : (settingValue == AniMorph.FilterDeltaTimeKind.Enable || settingValue == AniMorph.FilterDeltaTimeKind.OnlyInGame) ? (1f / 30f) 
+                : 1f;
+
+            while (count-- > 0 || Time.deltaTime > bigDeltaTime) // || count++ < 1000)
             {
 #if DEBUG
                 AniMorph.Logger.LogDebug($"StartCo:deltaTime[{Time.deltaTime:F3}]");
@@ -175,10 +184,13 @@ namespace AniMorph
             _boneEffector?.OnUpdate();
         }
 
-        public void OnConfigUpdate()
+        public static void OnConfigUpdate()
         {
-            HandleEnable();
-            _boneEffector?.OnConfigUpdate();
+            foreach (var instance in _instances)
+            {
+                instance.HandleEnable();
+                instance._boneEffector?.OnConfigUpdate();
+            }
         }
 
         protected override void OnReload(GameMode currentGameMode)

@@ -28,7 +28,7 @@ namespace AniMorph
     {
         public const string GUID = "AniMorph.ABMX";
         public const string Name = "Anisotropic Morph";
-        public const string Version = "0.23";
+        public const string Version = "0.24";
 
 
 
@@ -36,6 +36,7 @@ namespace AniMorph
 
         public static ConfigEntry<Gender> Enable;
         public static ConfigEntry<bool> MaleEnableDB;
+        public static ConfigEntry<FilterDeltaTimeKind> FilterDeltaTime;
 
         #region Breast
 
@@ -195,7 +196,10 @@ namespace AniMorph
 
 
             MaleEnableDB = Config.Bind("", "MaleEnableDB", true, new ConfigDescription("Force enable Dynamic Bones on males in Main Game as they are usually turned off", null, new ConfigurationManagerAttributes { Order = 99 }));
+            FilterDeltaTime = Config.Bind("", "FilterFPS", FilterDeltaTimeKind.OnlyInGame, new ConfigDescription("Filter lags and stutters of the frame rate to avoid visual glitches", null, new ConfigurationManagerAttributes { Order = 98 }));
+
             MaleEnableDB.SettingChanged += (_, _) => HooksMaleEnableDB.ApplyHooks();
+            FilterDeltaTime.SettingChanged += (_, _) => UpdateConfig();
             // Avoid hooking this one up for UpdateConfig().
 
             Hooks.ApplyHooks();
@@ -223,7 +227,7 @@ namespace AniMorph
                 new ConfigDescription("Adjust effects for the breast size\nUpdates after the scene change", null, new ConfigurationManagerAttributes { Order = 109 }));
 
             BreastDisableWhenClothes = Config.Bind("Breast", "DisableClothed", ClothesKind.Top | ClothesKind.Bra,
-                new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 108 }));
+                new ConfigDescription("Don't apply effects when particular piece of clothing is fully present", null, new ConfigurationManagerAttributes { Order = 108 }));
 
             BreastLinearSpringStrength = Config.Bind("Breast", "LinearStrength", 15f, 
                 new ConfigDescription("Strength of positional lag\nBigger value – more effort put out", null, new ConfigurationManagerAttributes { Order = 100 }));
@@ -324,7 +328,7 @@ namespace AniMorph
                 new ConfigDescription("Adjust effects for the butt size", null, new ConfigurationManagerAttributes { Order = 109 }));
 
             ButtDisableWhenClothes = Config.Bind("Butt", "DisableClothed", ClothesKind.Panty,
-                new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 108 }));
+                new ConfigDescription("Don't apply effects when particular piece of clothing is fully present", null, new ConfigurationManagerAttributes { Order = 108 }));
 
             ButtLinearSpringStrength = Config.Bind("Butt", "LinearStrength", 21f,
                 new ConfigDescription("Strength of positional lag\nBigger value – more effort put out", null, new ConfigurationManagerAttributes { Order = 100 }));
@@ -519,16 +523,7 @@ namespace AniMorph
 #if !DEBUG
             AdjustAllowedEffects();
 #endif
-
-            var type = typeof(AniMorphCharaController);
-            foreach (var charaController in CharacterApi.GetBehaviours())
-            {
-                if (charaController != null && charaController.GetType() == type)
-                {
-                    var aniMorphCharaController = (AniMorphCharaController)charaController;
-                    aniMorphCharaController.OnConfigUpdate();
-                }
-            }
+            AniMorphCharaController.OnConfigUpdate();
         }
 
         private void AdjustAllowedEffects()
@@ -587,6 +582,13 @@ namespace AniMorph
 #endif
         }
 
+        public enum FilterDeltaTimeKind
+        {
+            Disable,
+            Enable,
+            OnlyInStudio,
+            OnlyInGame,
+        }
 
     }
 }

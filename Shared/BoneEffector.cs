@@ -1,5 +1,6 @@
 ﻿using ADV.Commands.Base;
 using KKABMX.Core;
+using KKAPI.Studio;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -83,6 +84,7 @@ namespace AniMorph
         private readonly Dictionary<Body, float> _bodyPartSizeDic = [];
 
         private bool _updated;
+        private bool _filterDeltaTime;
 
         internal BoneEffector(ChaControl chara)
         {
@@ -304,7 +306,7 @@ namespace AniMorph
             if (deltaTime == 0f) return;
 
             // Opt for lesser evil during the lag spike,
-            if (deltaTime > 1f / 15f) deltaTime = 1f / 15f;
+            if (_filterDeltaTime && deltaTime > 1f / 15f) deltaTime = 1f / 15f;
 
             var fps = 1f / deltaTime;
             foreach (var key in _updateList)
@@ -324,6 +326,12 @@ namespace AniMorph
 
                 keyValuePair.Value.boneModifier.SetMass(mass);
             }
+
+            var deltaTimeSettingValue = AniMorph.FilterDeltaTime.Value;
+
+            _filterDeltaTime = deltaTimeSettingValue == AniMorph.FilterDeltaTimeKind.Enable
+                    || (deltaTimeSettingValue == AniMorph.FilterDeltaTimeKind.OnlyInGame && !StudioAPI.InsideStudio)
+                    || (deltaTimeSettingValue == AniMorph.FilterDeltaTimeKind.OnlyInStudio && StudioAPI.InsideStudio);
         }
 
         internal void OnSetClothesState(ChaControl chara)
